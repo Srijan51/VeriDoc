@@ -1,6 +1,6 @@
 # VeriDoc Backend
 
-> Enterprise Knowledge Truth Engine — FastAPI + Gemini + Pinecone + Supabase
+> Enterprise Knowledge Truth Engine — FastAPI + Gemini + Supabase pgvector
 
 ---
 
@@ -11,7 +11,7 @@
 | API Framework | FastAPI 0.111 |
 | AI / Generation | Gemini 1.5 Flash (`google-generativeai`) |
 | Embeddings | Google `text-embedding-004` |
-| Vector Store | Pinecone (Serverless, cosine, dim=768) |
+| Vector Store | Supabase pgvector (cosine, dim=768) |
 | Metadata Store | Supabase (PostgreSQL) |
 | Document Parsing | PyMuPDF (PDF), python-docx (DOCX) |
 
@@ -32,7 +32,7 @@ backend/
 │   │   └── documents.py        # GET  /documents
 │   └── services/
 │       ├── document_processor.py   # Text extraction + chunking
-│       ├── embeddings.py           # Pinecone upsert + search
+│       ├── embeddings.py         # Supabase pgvector insert + search
 │       ├── gemini.py               # Gemini answer generation
 │       └── storage.py              # Supabase CRUD
 ├── run.py                      # Dev server entry point
@@ -78,15 +78,14 @@ Required keys in `.env`:
 
 ```env
 GEMINI_API_KEY=...
-PINECONE_API_KEY=...
-PINECONE_INDEX=veridoc-index
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_KEY=...
 ALLOWED_ORIGINS=http://localhost:3000,https://your-app.vercel.app
 ```
 
-### 5. Set up Supabase table
+### 5. Set up Supabase table & pgvector
 Open the **Supabase SQL Editor** and run the contents of `supabase_schema.sql`.
+This will enable the `vector` extension, create the tables, and add the search function.
 
 ### 6. Start the server
 ```bash
@@ -188,5 +187,4 @@ List all uploaded documents with metadata.
 
 - Set `ENVIRONMENT=production` in your hosting environment.
 - Add your Vercel frontend URL to `ALLOWED_ORIGINS`.
-- Pinecone index is auto-created on first startup if it doesn't exist.
-- Supabase table must be created manually via `supabase_schema.sql`.
+- Supabase tables, vector extension, and RPC functions must be created manually via `supabase_schema.sql`.

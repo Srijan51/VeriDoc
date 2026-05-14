@@ -1,94 +1,75 @@
 """
-Pinecone service — upserts document chunk embeddings and performs
+Supabase pgvector service — upserts document chunk embeddings and performs
 similarity search using Google's text-embedding-004 model.
 """
 
 from __future__ import annotations
 
-import time
 import logging
 from typing import Any
 
-import google.genai as genai
-from pinecone import Pinecone, ServerlessSpec
+from google import genai
+from google.genai import types
 
 from app.config import get_settings
+from app.services.storage import _get_client
 
 logger = logging.getLogger(__name__)
 
-# ── Embedding dimension for text-embedding-004 ────────────────────────────────
+# ── Embedding dimension for text-embedding-004 ──────────────────────────────────────────────────────────
 EMBEDDING_DIM = 768
-EMBED_MODEL = "models/text-embedding-004"
+EMBED_MODEL = "text-embedding-004"
 BATCH_SIZE = 50   # vectors per upsert batch
 
 
 # ── Lazy singletons ───────────────────────────────────────────────────────────
 
-_pc: Pinecone | None = None
-_index = None
+_genai_client: genai.Client | None = None
 
 
-def _get_pinecone_index():
-    global _pc, _index
-    if _index is not None:
-        return _index
-
-    settings = get_settings()
-    genai.configure(api_key=settings.gemini_api_key)
-
-    _pc = Pinecone(api_key=settings.pinecone_api_key)
-
-    existing = [i.name for i in _pc.list_indexes()]
-    if settings.pinecone_index not in existing:
-        logger.info("Creating Pinecone index '%s'…", settings.pinecone_index)
-        _pc.create_index(
-            name=settings.pinecone_index,
-            dimension=EMBEDDING_DIM,
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-        )
-        # Wait until ready
-        while not _pc.describe_index(settings.pinecone_index).status["ready"]:
-            time.sleep(1)
-
-    _index = _pc.Index(settings.pinecone_index)
-    return _index
+def _get_genai_client() -> genai.Client:
+    global _genai_client
+    if _genai_client is None:
+        settings = get_settings()
+        _genai_client = genai.Client(api_key=settings.gemini_api_key)
+    return _genai_client
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _embed_texts(texts: list[str]) -> list[list[float]]:
     """Embed a list of strings using Google's embedding API."""
-    result = genai.embed_content(
+    client = _get_genai_client()
+    result = client.models.embed_content(
         model=EMBED_MODEL,
-        content=texts,
-        task_type="retrieval_document",
+        contents=texts,
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
     )
-    return result["embedding"]
+    return [embedding.values for embedding in result.embeddings]
 
 
 def _embed_query(text: str) -> list[float]:
     """Embed a single query string."""
-    result = genai.embed_content(
+    client = _get_genai_client()
+    result = client.models.embed_content(
         model=EMBED_MODEL,
-        content=text,
-        task_type="retrieval_query",
+        contents=text,
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
     )
-    return result["embedding"]
+    return result.embeddings[0].values
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def upsert_chunks(doc_id: str, filename: str, chunks: list[dict]) -> int:
     """
-    Embed all chunks and upsert into Pinecone.
+    Embed all chunks and insert them into Supabase `document_chunks` table.
 
-    Each vector ID is  ``{doc_id}#{chunk_index}``.
-    Metadata stored: doc_id, filename, chunk_index, text (truncated to 512 chars).
+    Metadata stored: doc_id, filename, chunk_index, text.
 
-    Returns the number of vectors upserted.
+    Returns the number of vectors inserted.
     """
-    index = _get_pinecone_index()
+    supabase = _get_client()
     texts = [c["text"] for c in chunks]
 
     all_vectors: list[dict] = []
@@ -100,23 +81,26 @@ def upsert_chunks(doc_id: str, filename: str, chunks: list[dict]) -> int:
             chunk_idx = chunk["chunk_index"]
             all_vectors.append(
                 {
-                    "id": f"{doc_id}#{chunk_idx}",
-                    "values": emb,
-                    "metadata": {
-                        "doc_id": doc_id,
-                        "filename": filename,
-                        "chunk_index": chunk_idx,
-                        "text": chunk["text"][:512],
-                    },
+                    "doc_id": doc_id,
+                    "filename": filename,
+                    "chunk_index": chunk_idx,
+                    "text": chunk["text"],
+                    "embedding": emb,
                 }
             )
 
-    # Upsert in batches
+    # Insert in batches
     for i in range(0, len(all_vectors), BATCH_SIZE):
-        index.upsert(vectors=all_vectors[i : i + BATCH_SIZE])
+        supabase.table("document_chunks").insert(all_vectors[i : i + BATCH_SIZE]).execute()
 
     logger.info("Upserted %d vectors for doc_id=%s", len(all_vectors), doc_id)
     return len(all_vectors)
+
+
+def embed_chunks(chunks: list[dict]) -> list[list[float]]:
+    """Embed a list of document chunks."""
+    texts = [chunk["text"] for chunk in chunks]
+    return _embed_texts(texts)
 
 
 def similarity_search(
@@ -125,7 +109,7 @@ def similarity_search(
     top_k: int = 5,
 ) -> list[dict]:
     """
-    Query Pinecone for the most relevant chunks.
+    Query Supabase (pgvector) for the most relevant chunks using RPC.
 
     Args:
         query:   Natural-language question.
@@ -135,30 +119,27 @@ def similarity_search(
     Returns a list of dicts with keys:
         doc_id, filename, chunk_index, text, score
     """
-    index = _get_pinecone_index()
+    supabase = _get_client()
     query_emb = _embed_query(query)
 
-    filter_expr: dict | None = None
-    if doc_ids:
-        filter_expr = {"doc_id": {"$in": doc_ids}}
+    rpc_params = {
+        "query_embedding": query_emb,
+        "match_threshold": 0.0,
+        "match_count": top_k,
+        "filter_doc_ids": doc_ids if doc_ids else [],
+    }
 
-    response = index.query(
-        vector=query_emb,
-        top_k=top_k,
-        include_metadata=True,
-        filter=filter_expr,
-    )
-
+    response = supabase.rpc("match_document_chunks", rpc_params).execute()
+    
     results = []
-    for match in response.matches:
-        meta = match.metadata or {}
+    for match in response.data:
         results.append(
             {
-                "doc_id": meta.get("doc_id", ""),
-                "filename": meta.get("filename", ""),
-                "chunk_index": int(meta.get("chunk_index", 0)),
-                "text": meta.get("text", ""),
-                "score": float(match.score),
+                "doc_id": match.get("doc_id", ""),
+                "filename": match.get("filename", ""),
+                "chunk_index": int(match.get("chunk_index", 0)),
+                "text": match.get("text", ""),
+                "score": float(match.get("similarity", 0.0)),
             }
         )
 
@@ -166,8 +147,7 @@ def similarity_search(
 
 
 def delete_document_vectors(doc_id: str) -> None:
-    """Delete all vectors belonging to a document."""
-    index = _get_pinecone_index()
-    # Pinecone supports delete by prefix only in some tiers; use metadata filter
-    index.delete(filter={"doc_id": {"$eq": doc_id}})
+    """Delete all vectors belonging to a document. Handled automatically via ON DELETE CASCADE in Postgres if we delete the document, but this gives manual control."""
+    supabase = _get_client()
+    supabase.table("document_chunks").delete().eq("doc_id", doc_id).execute()
     logger.info("Deleted vectors for doc_id=%s", doc_id)

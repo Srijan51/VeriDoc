@@ -21,6 +21,8 @@ _client: Client | None = None
 #   CREATE TABLE IF NOT EXISTS documents (
 #     doc_id      TEXT PRIMARY KEY,
 #     filename    TEXT NOT NULL,
+#     doc_type    TEXT NOT NULL,
+#     doc_date    DATE NOT NULL,
 #     file_type   TEXT NOT NULL,
 #     chunk_count INTEGER NOT NULL DEFAULT 0,
 #     size_bytes  INTEGER,
@@ -105,3 +107,29 @@ def delete_document_metadata(doc_id: str) -> None:
     client = _get_client()
     client.table("documents").delete().eq("doc_id", doc_id).execute()
     logger.info("Deleted metadata for doc_id=%s", doc_id)
+
+
+def store_in_supabase(
+    doc_id: str,
+    chunks: list[dict],
+    embeddings: list[list[float]],
+    base_metadata: dict,
+    file_type: str,
+    chunk_count: int,
+    size_bytes: int | None = None,
+) -> dict:
+    """Persist document metadata into Supabase."""
+    client = _get_client()
+    row = {
+        "doc_id": doc_id,
+        "filename": base_metadata.get("filename"),
+        "doc_type": base_metadata.get("doc_type"),
+        "doc_date": base_metadata.get("doc_date"),
+        "file_type": file_type,
+        "chunk_count": chunk_count,
+        "size_bytes": size_bytes,
+        "uploaded_at": _now_iso(),
+    }
+    response = client.table("documents").insert(row).execute()
+    logger.info("Stored document metadata for doc_id=%s", doc_id)
+    return response.data[0] if response.data else row

@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import logging
 
-import google.genai as genai
+from google import genai
+from google.genai import types
 
 from app.config import get_settings
 
@@ -15,30 +16,15 @@ logger = logging.getLogger(__name__)
 
 GENERATION_MODEL = "gemini-1.5-flash"
 
-_model: genai.GenerativeModel | None = None
+_genai_client: genai.Client | None = None
 
 
-def _get_model() -> genai.GenerativeModel:
-    global _model
-    if _model is None:
+def _get_genai_client() -> genai.Client:
+    global _genai_client
+    if _genai_client is None:
         settings = get_settings()
-        genai.configure(api_key=settings.gemini_api_key)
-        _model = genai.GenerativeModel(
-            model_name=GENERATION_MODEL,
-            generation_config={
-                "temperature": 0.2,
-                "top_p": 0.95,
-                "max_output_tokens": 2048,
-            },
-            system_instruction=(
-                "You are VeriDoc, an enterprise knowledge truth engine. "
-                "Answer questions strictly based on the provided document context. "
-                "If the context does not contain enough information to answer, "
-                "say so clearly — do NOT hallucinate. "
-                "Be concise, factual, and cite which source chunk supports each claim."
-            ),
-        )
-    return _model
+        _genai_client = genai.Client(api_key=settings.gemini_api_key)
+    return _genai_client
 
 
 # ── Prompt builder ────────────────────────────────────────────────────────────
@@ -81,7 +67,7 @@ def generate_answer(question: str, context_chunks: list[dict]) -> str:
             "to answer your question. Please try rephrasing or upload additional documents."
         )
 
-    model = _get_model()
+    client = _get_genai_client()
     prompt = _build_prompt(question, context_chunks)
 
     logger.info(
@@ -90,5 +76,20 @@ def generate_answer(question: str, context_chunks: list[dict]) -> str:
         len(context_chunks),
     )
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model=GENERATION_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            systemInstruction=(
+                "You are VeriDoc, an enterprise knowledge truth engine. "
+                "Answer questions strictly based on the provided document context. "
+                "If the context does not contain enough information to answer, "
+                "say so clearly — do NOT hallucinate. "
+                "Be concise, factual, and cite which source chunk supports each claim."
+            ),
+            temperature=0.2,
+            topP=0.95,
+            maxOutputTokens=2048,
+        ),
+    )
     return response.text.strip()

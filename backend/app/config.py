@@ -13,10 +13,6 @@ class Settings(BaseSettings):
     # Gemini
     gemini_api_key: str = ""
 
-    # Pinecone
-    pinecone_api_key: str = ""
-    pinecone_index: str = "veridoc-index"
-
     # Supabase
     supabase_url: str = ""
     supabase_key: str = ""
