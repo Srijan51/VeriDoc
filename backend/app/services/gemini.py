@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 
-import google.generativeai as genai
+import google.genai as genai
 
 from app.config import get_settings
 

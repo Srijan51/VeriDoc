@@ -9,7 +9,7 @@ import time
 import logging
 from typing import Any
 
-import google.generativeai as genai
+import google.genai as genai
 from pinecone import Pinecone, ServerlessSpec
 
 from app.config import get_settings
