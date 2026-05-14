@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import SearchBar from "@/components/ui/SearchBar";
 
 export default function HeroSection() {
@@ -44,8 +45,9 @@ export default function HeroSection() {
 
           {/* CTA Buttons */}
           <div className="flex items-center gap-3 mb-10 animate-slide-up delay-500" style={{ opacity: 0, animationFillMode: "forwards" }}>
-            <button
+            <Link
               id="hero-upload"
+              href="/documents"
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white transition-all hover:opacity-90"
               style={{
                 background: "linear-gradient(135deg, var(--accent-mint), var(--accent-teal))",
@@ -58,21 +60,7 @@ export default function HeroSection() {
                 <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
               </svg>
               Upload Documents
-            </button>
-            <button
-              id="hero-query"
-              className="flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold transition-all hover:opacity-80"
-              style={{
-                backgroundColor: "var(--text-primary)",
-                color: "white",
-                fontFamily: "var(--font-body), system-ui, sans-serif",
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-              </svg>
-              Start Querying
-            </button>
+            </Link>
           </div>
 
           {/* Trust Badges */}

@@ -86,26 +86,54 @@ export default function Sidebar() {
         <div className="flex items-center gap-3">
           {/* New Book Logo */}
           <div className="flex items-center justify-center">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg width="34" height="34" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
               <defs>
-                <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+                <linearGradient id="leftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor="var(--accent-mint)" />
                   <stop offset="100%" stopColor="var(--accent-teal)" />
                 </linearGradient>
+                <linearGradient id="rightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor="#4A4A4A" />
+                  <stop offset="100%" stopColor="var(--text-primary)" />
+                </linearGradient>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="3" result="blur" />
+                  <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
               </defs>
-              {/* Left Page */}
-              <path d="M 3 3 L 3 14 L 11.5 20 L 11.5 9 Z" fill="url(#logoGrad)" />
-              {/* Right Page */}
-              <path d="M 21 3 L 21 14 L 12.5 20 L 12.5 9 Z" fill="var(--text-primary)" />
+
+              {/* Left Cover */}
+              <polygon points="5,20 48,40 48,95 5,70" fill="url(#leftGrad)" />
               
-              {/* Left Page Lines */}
-              <path d="M 5.5 6.5 L 9.5 9.3 M 5.5 9 L 9.5 11.8 M 5.5 11.5 L 9.5 14.3" stroke="var(--bg-primary)" strokeWidth="1" strokeLinecap="round" />
+              {/* Right Cover */}
+              <polygon points="95,20 95,70 52,95 52,40" fill="url(#rightGrad)" />
               
-              {/* Right Page Lines */}
-              <path d="M 18.5 6.5 L 14.5 9.3 M 18.5 9 L 14.5 11.8 M 18.5 11.5 L 14.5 14.3" stroke="var(--bg-primary)" strokeWidth="1" strokeLinecap="round" />
+              {/* Left Inner Document */}
+              <polygon points="18,33 40,43 40,82 18,65" fill="#ffffff" />
               
-              {/* Center Star/Glow */}
-              <path d="M 12 15 L 13.5 20 L 12 23 L 10.5 20 Z" fill="var(--accent-cyan)" />
+              {/* Left Document Details */}
+              {/* Header Block */}
+              <polygon points="21,37 30,41 30,49 21,45" fill="var(--accent-teal)" />
+              {/* Text Lines */}
+              <polygon points="21,52 37,59 37,61 21,54" fill="var(--accent-teal)" />
+              <polygon points="21,57 37,64 37,66 21,59" fill="var(--accent-teal)" />
+              <polygon points="21,62 33,67 33,69 21,64" fill="var(--accent-teal)" />
+
+              {/* Right Inner Document */}
+              <polygon points="82,33 82,65 60,82 60,43" fill="#ffffff" />
+              
+              {/* Right Document Details */}
+              {/* Header Block */}
+              <polygon points="79,37 70,41 70,49 79,45" fill="var(--text-secondary)" />
+              {/* Text Lines */}
+              <polygon points="79,52 63,59 63,61 79,54" fill="var(--text-secondary)" />
+              <polygon points="79,57 63,64 63,66 79,59" fill="var(--text-secondary)" />
+              <polygon points="79,62 67,67 67,69 79,64" fill="var(--text-secondary)" />
+
+              {/* Center Star Glow */}
+              <path d="M50 70 Q50 85 65 85 Q50 85 50 100 Q50 85 35 85 Q50 85 50 70 Z" fill="var(--bg-primary)" filter="url(#glow)"/>
+              {/* Center Star Core */}
+              <path d="M50 75 Q50 85 60 85 Q50 85 50 95 Q50 85 40 85 Q50 85 50 75 Z" fill="#ffffff" />
             </svg>
           </div>
           <div>
