@@ -24,7 +24,19 @@ def chunk_text(text: str) -> list[str]:
 # Generate embeddings for a list of text chunks using Gemini text-embedding-004 model.
 # Batch in groups of 20 to respect rate limits.
 # Return list of embedding vectors (list of floats).
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
+
 def embed_chunks(chunks: list[str]) -> list[list[float]]:
+    # Initialize the correct, current Gemini embedding model
+    embeddings_model = GoogleGenerativeAIEmbeddings(
+        model="models/text-embedding-004" # Using the stable 004 version
+    )
+    
+    # Generate the embeddings for the list of chunks
+    # LangChain automatically handles the batching for you!
+    embeddings = embeddings_model.embed_documents(chunks)
+    
+    return embeddings
 
 # Insert chunk text, embeddings, and metadata into the Supabase 'documents' table.
 # Prepare a list of dictionaries, each containing: 'content' (chunk text), 'embedding' (vector), and 'metadata' (dict with filename, doc_type, doc_date, chunk_index).
