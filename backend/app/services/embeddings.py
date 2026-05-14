@@ -16,13 +16,13 @@ from app.services.storage import _get_client
 
 logger = logging.getLogger(__name__)
 
-# ── Embedding dimension for text-embedding-004 ──────────────────────────────────────────────────────────
-EMBEDDING_DIM = 768
-EMBED_MODEL = "text-embedding-004"
-BATCH_SIZE = 50   # vectors per upsert batch
+# ── Embedding dimension for text-embedding-004 ────────────────────────────────
+EMBEDDING_DIM = 3072
+EMBED_MODEL = "models/gemini-embedding-001"
+BATCH_SIZE = 50
 
 
-# ── Lazy singletons ───────────────────────────────────────────────────────────
+# ── Lazy singleton ────────────────────────────────────────────────────────────
 
 _genai_client: genai.Client | None = None
 
@@ -38,14 +38,23 @@ def _get_genai_client() -> genai.Client:
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _embed_texts(texts: list[str]) -> list[list[float]]:
-    """Embed a list of strings using Google's embedding API."""
+    """
+    Embed a list of strings using Google's text-embedding-004 model.
+    google-genai 1.x does not support batched embed_content reliably,
+    so we call once per text and collect results.
+    """
     client = _get_genai_client()
-    result = client.models.embed_content(
-        model=EMBED_MODEL,
-        contents=texts,
-        config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
-    )
-    return [embedding.values for embedding in result.embeddings]
+    embeddings: list[list[float]] = []
+
+    for text in texts:
+        result = client.models.embed_content(
+            model=EMBED_MODEL,
+            contents=text,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+        )
+        embeddings.append(result.embeddings[0].values)
+
+    return embeddings
 
 
 def _embed_query(text: str) -> list[float]:
@@ -64,9 +73,6 @@ def _embed_query(text: str) -> list[float]:
 def upsert_chunks(doc_id: str, filename: str, chunks: list[dict]) -> int:
     """
     Embed all chunks and insert them into Supabase `document_chunks` table.
-
-    Metadata stored: doc_id, filename, chunk_index, text.
-
     Returns the number of vectors inserted.
     """
     supabase = _get_client()
@@ -77,19 +83,17 @@ def upsert_chunks(doc_id: str, filename: str, chunks: list[dict]) -> int:
         batch_texts = texts[i : i + BATCH_SIZE]
         embeddings = _embed_texts(batch_texts)
 
-        for j, (chunk, emb) in enumerate(zip(chunks[i:], embeddings)):
-            chunk_idx = chunk["chunk_index"]
+        for chunk, emb in zip(chunks[i : i + BATCH_SIZE], embeddings):
             all_vectors.append(
                 {
                     "doc_id": doc_id,
                     "filename": filename,
-                    "chunk_index": chunk_idx,
+                    "chunk_index": chunk["chunk_index"],
                     "text": chunk["text"],
                     "embedding": emb,
                 }
             )
 
-    # Insert in batches
     for i in range(0, len(all_vectors), BATCH_SIZE):
         supabase.table("document_chunks").insert(all_vectors[i : i + BATCH_SIZE]).execute()
 
@@ -110,14 +114,7 @@ def similarity_search(
 ) -> list[dict]:
     """
     Query Supabase (pgvector) for the most relevant chunks using RPC.
-
-    Args:
-        query:   Natural-language question.
-        doc_ids: Optional list of doc_ids to restrict search to.
-        top_k:   Number of results to return.
-
-    Returns a list of dicts with keys:
-        doc_id, filename, chunk_index, text, score
+    Returns a list of dicts with keys: doc_id, filename, chunk_index, text, score
     """
     supabase = _get_client()
     query_emb = _embed_query(query)
@@ -130,7 +127,7 @@ def similarity_search(
     }
 
     response = supabase.rpc("match_document_chunks", rpc_params).execute()
-    
+
     results = []
     for match in response.data:
         results.append(
@@ -147,7 +144,7 @@ def similarity_search(
 
 
 def delete_document_vectors(doc_id: str) -> None:
-    """Delete all vectors belonging to a document. Handled automatically via ON DELETE CASCADE in Postgres if we delete the document, but this gives manual control."""
+    """Delete all vectors belonging to a document."""
     supabase = _get_client()
     supabase.table("document_chunks").delete().eq("doc_id", doc_id).execute()
     logger.info("Deleted vectors for doc_id=%s", doc_id)

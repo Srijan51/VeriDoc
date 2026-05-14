@@ -23,7 +23,10 @@ def _get_genai_client() -> genai.Client:
     global _genai_client
     if _genai_client is None:
         settings = get_settings()
-        _genai_client = genai.Client(api_key=settings.gemini_api_key)
+        _genai_client = genai.Client(
+            api_key=settings.gemini_api_key,
+            http_options={"api_version": "v1"},
+        )
     return _genai_client
 
 

@@ -139,21 +139,13 @@ def create_app() -> FastAPI:
                     detail="No extractable text found in the document.",
                 )
 
-            try:
-                embeddings = embed_chunks(chunks)
-            except Exception as exc:
-                logger.exception("Failed to embed chunks")
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"Embedding service failed: {exc}",
-                )
+            
 
             try:
                 upsert_chunks(
                     doc_id=doc_id,
                     filename=filename,
                     chunks=chunks,
-                    embeddings=embeddings,
                 )
             except Exception as exc:
                 logger.exception("Failed to index document vectors")
@@ -172,7 +164,6 @@ def create_app() -> FastAPI:
                 store_in_supabase(
                     doc_id=doc_id,
                     chunks=chunks,
-                    embeddings=embeddings,
                     base_metadata=base_metadata,
                     file_type=SUPPORTED_TYPES[content_type],
                     chunk_count=len(chunks),

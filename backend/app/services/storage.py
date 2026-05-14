@@ -112,7 +112,6 @@ def delete_document_metadata(doc_id: str) -> None:
 def store_in_supabase(
     doc_id: str,
     chunks: list[dict],
-    embeddings: list[list[float]],
     base_metadata: dict,
     file_type: str,
     chunk_count: int,
