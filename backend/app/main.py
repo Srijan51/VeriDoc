@@ -193,6 +193,29 @@ def create_app() -> FastAPI:
     async def health() -> JSONResponse:
         return JSONResponse({"status": "ok", "service": "veridoc-api"})
 
+    @app.get("/models", tags=["health"], summary="List available Gemini models")
+    async def list_models() -> JSONResponse:
+        """List available Gemini models for debugging API key issues."""
+        try:
+            from google import genai
+            settings = get_settings()
+            client = genai.Client(api_key=settings.gemini_api_key)
+            models = list(client.models.list())
+            model_names = [m.name for m in models]
+            return JSONResponse({
+                "available_models": model_names,
+                "count": len(model_names),
+            })
+        except Exception as exc:
+            logger.exception("Failed to list models")
+            return JSONResponse(
+                {
+                    "error": str(exc),
+                    "detail": "Could not list available Gemini models",
+                },
+                status_code=503,
+            )
+
     @app.get("/", tags=["health"], include_in_schema=False)
     async def root() -> JSONResponse:
         return JSONResponse(
@@ -201,6 +224,7 @@ def create_app() -> FastAPI:
                 "version": "1.0.0",
                 "docs": "/docs",
                 "health": "/health",
+                "models": "/models",
             }
         )
 

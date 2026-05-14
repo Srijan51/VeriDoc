@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional
 import uuid
 from datetime import datetime
 
@@ -32,36 +32,9 @@ class SourceChunk(BaseModel):
 
 class QueryResponse(BaseModel):
     question: str
-    answer: Optional[str] = None
-    sources: list[SourceChunk]
-    model: str = "gemini-1.5-flash"
-
-
-class Citation(BaseModel):
-    source: str
-    doc_type: str
-    doc_date: str
-    claim: str
-
-
-class Contradiction(BaseModel):
-    topic: str
-    source_a: str
-    claim_a: str
-    source_b: str
-    claim_b: str
-    severity: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"]
-    authoritative_source: str
-    reason: str
-
-
-class AuditQueryResponse(BaseModel):
     answer: str
-    confidence_score: float
-    citations: list[Citation]
-    contradictions: list[Contradiction]
-    no_answer_found: bool
-    no_answer_reason: Optional[str] = None
+    sources: list[SourceChunk]
+    model: str = "models/gemini-2.5-flash"
 
 
 # ── Documents ─────────────────────────────────────────────────────────────────

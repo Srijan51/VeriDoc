@@ -9,32 +9,20 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.models.schemas import QueryRequest, QueryResponse, SourceChunk, AuditQueryResponse
+from app.models.schemas import QueryRequest, QueryResponse, SourceChunk
 from app.services.embeddings import similarity_search
-from app.services.gemini import generate_answer, generate_audit_answer, GENERATION_MODEL
+from app.services.gemini import generate_answer, GENERATION_MODEL
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])
 
 
-def group_by_source(chunks: list[dict]) -> dict[str, list[dict]]:
-    grouped = {}
-    for chunk in chunks:
-        filename = chunk["filename"]
-        if filename not in grouped:
-            grouped[filename] = []
-        grouped[filename].append(chunk)
-    for filename in grouped:
-        grouped[filename].sort(key=lambda c: c["chunk_index"])
-    return grouped
-
-
 @router.post(
     "",
-    response_model=AuditQueryResponse,
+    response_model=QueryResponse,
     summary="Query the knowledge base",
 )
-async def query_documents(body: QueryRequest) -> AuditQueryResponse:
+async def query_documents(body: QueryRequest) -> QueryResponse:
     """
     Ask a natural-language question against your indexed documents.
 
@@ -46,7 +34,7 @@ async def query_documents(body: QueryRequest) -> AuditQueryResponse:
         chunks = similarity_search(
             query=body.question,
             doc_ids=body.doc_ids if body.doc_ids else None,
-            top_k=8,
+            top_k=body.top_k,
         )
     except Exception as exc:
         logger.exception("Similarity search failed")
@@ -56,12 +44,28 @@ async def query_documents(body: QueryRequest) -> AuditQueryResponse:
         )
 
     try:
-        audit_result = generate_audit_answer(question=body.question, context_chunks=chunks)
+        answer = generate_answer(question=body.question, context_chunks=chunks)
     except Exception as exc:
-        logger.exception("Audit answer generation failed")
+        logger.exception("Answer generation failed")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Audit generation failed: {exc}",
+            detail=f"Answer generation failed: {exc}",
         )
 
-    return AuditQueryResponse(**audit_result)
+    sources = [
+        SourceChunk(
+            doc_id=c["doc_id"],
+            filename=c["filename"],
+            chunk_index=c["chunk_index"],
+            text=c["text"],
+            score=c["score"],
+        )
+        for c in chunks
+    ]
+
+    return QueryResponse(
+        question=body.question,
+        answer=answer,
+        sources=sources,
+        model=GENERATION_MODEL,
+    )
