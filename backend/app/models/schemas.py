@@ -32,7 +32,7 @@ class SourceChunk(BaseModel):
 
 class QueryResponse(BaseModel):
     question: str
-    answer: str
+    answer: Optional[str] = None
     sources: list[SourceChunk]
     model: str = "gemini-1.5-flash"
 

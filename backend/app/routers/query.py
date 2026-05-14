@@ -17,6 +17,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])
 
 
+def group_by_source(chunks: list[dict]) -> dict[str, list[dict]]:
+    grouped = {}
+    for chunk in chunks:
+        filename = chunk["filename"]
+        if filename not in grouped:
+            grouped[filename] = []
+        grouped[filename].append(chunk)
+    for filename in grouped:
+        grouped[filename].sort(key=lambda c: c["chunk_index"])
+    return grouped
+
+
 @router.post(
     "",
     response_model=QueryResponse,
@@ -34,7 +46,7 @@ async def query_documents(body: QueryRequest) -> QueryResponse:
         chunks = similarity_search(
             query=body.question,
             doc_ids=body.doc_ids if body.doc_ids else None,
-            top_k=body.top_k,
+            top_k=8,
         )
     except Exception as exc:
         logger.exception("Similarity search failed")
@@ -43,14 +55,17 @@ async def query_documents(body: QueryRequest) -> QueryResponse:
             detail=f"Vector search failed: {exc}",
         )
 
-    try:
-        answer = generate_answer(question=body.question, context_chunks=chunks)
-    except Exception as exc:
-        logger.exception("Answer generation failed")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Answer generation failed: {exc}",
+    # Build context string
+    context_parts = []
+    for i, chunk in enumerate(chunks, start=1):
+        context_parts.append(
+            f"[Source {i} | {chunk['filename']} | chunk {chunk['chunk_index']}]\n"
+            f"{chunk['text']}"
         )
+    context_str = "\n\n---\n\n".join(context_parts)
+
+    # Stub generate_answer
+    answer = None
 
     sources = [
         SourceChunk(
@@ -67,5 +82,5 @@ async def query_documents(body: QueryRequest) -> QueryResponse:
         question=body.question,
         answer=answer,
         sources=sources,
-        model=GENERATION_MODEL,
+        model="gemini-1.5-flash",
     )
