@@ -9,9 +9,9 @@ import logging
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.models.schemas import QueryRequest, QueryResponse, SourceChunk
+from app.models.schemas import QueryRequest, QueryResponse, SourceChunk, AuditQueryResponse
 from app.services.embeddings import similarity_search
-from app.services.gemini import generate_answer, GENERATION_MODEL
+from app.services.gemini import generate_answer, generate_audit_answer, GENERATION_MODEL
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])
@@ -31,10 +31,10 @@ def group_by_source(chunks: list[dict]) -> dict[str, list[dict]]:
 
 @router.post(
     "",
-    response_model=QueryResponse,
+    response_model=AuditQueryResponse,
     summary="Query the knowledge base",
 )
-async def query_documents(body: QueryRequest) -> QueryResponse:
+async def query_documents(body: QueryRequest) -> AuditQueryResponse:
     """
     Ask a natural-language question against your indexed documents.
 
@@ -55,32 +55,13 @@ async def query_documents(body: QueryRequest) -> QueryResponse:
             detail=f"Vector search failed: {exc}",
         )
 
-    # Build context string
-    context_parts = []
-    for i, chunk in enumerate(chunks, start=1):
-        context_parts.append(
-            f"[Source {i} | {chunk['filename']} | chunk {chunk['chunk_index']}]\n"
-            f"{chunk['text']}"
+    try:
+        audit_result = generate_audit_answer(question=body.question, context_chunks=chunks)
+    except Exception as exc:
+        logger.exception("Audit answer generation failed")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Audit generation failed: {exc}",
         )
-    context_str = "\n\n---\n\n".join(context_parts)
 
-    # Stub generate_answer
-    answer = None
-
-    sources = [
-        SourceChunk(
-            doc_id=c["doc_id"],
-            filename=c["filename"],
-            chunk_index=c["chunk_index"],
-            text=c["text"],
-            score=c["score"],
-        )
-        for c in chunks
-    ]
-
-    return QueryResponse(
-        question=body.question,
-        answer=answer,
-        sources=sources,
-        model="gemini-1.5-flash",
-    )
+    return AuditQueryResponse(**audit_result)
