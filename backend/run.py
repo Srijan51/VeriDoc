@@ -4,6 +4,10 @@ Uvicorn entry point — run with:
 or directly:
     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
+from dotenv import load_dotenv
+import os
+load_dotenv()
+print("GEMINI KEY:", os.getenv("GEMINI_API_KEY", "NOT FOUND")[:12])
 
 import uvicorn
 

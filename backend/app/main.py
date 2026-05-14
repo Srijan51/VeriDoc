@@ -138,22 +138,7 @@ def create_app() -> FastAPI:
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="No extractable text found in the document.",
                 )
-
             
-
-            try:
-                upsert_chunks(
-                    doc_id=doc_id,
-                    filename=filename,
-                    chunks=chunks,
-                )
-            except Exception as exc:
-                logger.exception("Failed to index document vectors")
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail=f"Vector indexing failed: {exc}",
-                )
-
             base_metadata = {
                 "filename": filename,
                 "doc_type": doc_type,
@@ -175,7 +160,22 @@ def create_app() -> FastAPI:
                     status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                     detail=f"Metadata persistence failed: {exc}",
                 )
+            
 
+            try:
+                upsert_chunks(
+                    doc_id=doc_id,
+                    filename=filename,
+                    chunks=chunks,
+                )
+            except Exception as exc:
+                logger.exception("Failed to index document vectors")
+                print("REAL ERROR:", repr(exc))
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Vector indexing failed: {exc}",
+                )
+            
             return {
                 "filename": filename,
                 "chunk_count": len(chunks),
