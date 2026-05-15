@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
         doc_type: str = Form(...),
         doc_date: str = Form(...),
     ) -> dict:
-        allowed_doc_types = {"policy", "handbook", "sop", "memo"}
+        allowed_doc_types = {"Policy", "Handbook", "SOP", "Memo"}
         if doc_type not in allowed_doc_types:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
