@@ -1,10 +1,27 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import SearchBar from "@/components/ui/SearchBar";
+import { fetchDocuments } from "@/lib/api";
 
 export default function HeroSection() {
+  const [documentCount, setDocumentCount] = useState(0);
+
+  useEffect(() => {
+    const fetchDocCount = async () => {
+      try {
+        const response = await fetchDocuments();
+        setDocumentCount(response.total);
+      } catch (error) {
+        // Silently fail
+        setDocumentCount(0);
+      }
+    };
+
+    fetchDocCount();
+  }, []);
+
   return (
     <section id="hero-section" className="relative">
       {/* Single-column centered layout */}
@@ -59,10 +76,32 @@ export default function HeroSection() {
             </svg>
             Upload Documents
           </Link>
+          <Link
+            href="/ai-assistant"
+            className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold border border-white/60 glass-panel text-text-primary hover:bg-white/40 transition-all"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Ask AI Assistant
+          </Link>
         </div>
 
-        {/* Trust Badges */}
-        <div className="animate-slide-up delay-600 flex flex-col items-center" style={{ opacity: 0, animationFillMode: "forwards" }}>
+        {/* Document Count + Status */}
+        <div className="animate-slide-up delay-600" style={{ opacity: 0, animationFillMode: "forwards" }}>
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/60">
+              <div className="w-2 h-2 rounded-full bg-accent-mint animate-pulse"></div>
+              <span className="text-[13px] font-medium text-text-primary">
+                {documentCount > 0 
+                  ? `${documentCount} document${documentCount !== 1 ? "s" : ""} indexed`
+                  : "Ready to get started"
+                }
+              </span>
+            </div>
+          </div>
+
+          {/* Trust Badges */}
           <p
             className="label-caps text-[10px] mb-4 text-center"
             style={{ color: "var(--text-muted)", letterSpacing: "0.15em" }}

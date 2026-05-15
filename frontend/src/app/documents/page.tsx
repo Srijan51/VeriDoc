@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
@@ -9,6 +9,7 @@ import AuthorityBar from "@/components/ui/AuthorityBar";
 import SeverityBadge from "@/components/ui/SeverityBadge";
 import FileDetailsModal from "@/components/ui/FileDetailsModal";
 import { fetchDocuments, uploadDocument } from "@/lib/api";
+import { useToast } from "@/lib/hooks/useToast";
 
 // Represents the expected backend document model
 interface Document {
@@ -24,66 +25,21 @@ interface Document {
 
 export default function DocumentsPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [filteredDocuments, setFilteredDocuments] = useState<Document[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
   const [isFileDetailsOpen, setIsFileDetailsOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { addToast } = useToast();
 
-  useEffect(() => {
-    const loadDocuments = async () => {
-      try {
-        setIsLoading(true);
-        const response = await fetchDocuments();
-        const mapped = response.documents.map((doc) => ({
-          id: doc.doc_id,
-          name: doc.filename,
-          type: doc.file_type,
-          department: "",
-          uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
-          authorityScore: 80,
-          conflicts: 0,
-          status: "Active" as const,
-        }));
-        setDocuments(mapped);
-      } catch (error) {
-        console.error("Failed to fetch documents", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadDocuments();
-  }, []);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setIsFileDetailsOpen(true);
-    }
-  };
-
-  const handleUpload = async (details: {
-    type: string;
-    date: string;
-    file?: File;
-  }) => {
-    if (!details.file && !selectedFile) {
-      console.error("No file selected");
-      return;
-    }
-
-    const fileToUpload = details.file || selectedFile;
-    if (!fileToUpload) return;
-
+  const loadDocuments = useCallback(async () => {
     try {
-      setIsUploading(true);
-      await uploadDocument(fileToUpload, details.type, details.date);
-
-      // Refresh documents list
+      setIsLoading(true);
       const response = await fetchDocuments();
       const mapped = response.documents.map((doc) => ({
         id: doc.doc_id,
@@ -96,16 +52,91 @@ export default function DocumentsPage() {
         status: "Active" as const,
       }));
       setDocuments(mapped);
+      addToast(`✅ Loaded ${mapped.length} document(s)`, "success");
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to fetch documents";
+      addToast(errorMessage, "error");
+      setDocuments([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
+
+  // Filter and search logic
+  useEffect(() => {
+    let result = documents;
+
+    // Apply type filter
+    if (activeFilter !== "All") {
+      result = result.filter((doc) => doc.type.toUpperCase() === activeFilter.toUpperCase());
+    }
+
+    // Apply search
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((doc) => doc.name.toLowerCase().includes(query));
+    }
+
+    // Apply sorting
+    if (sortBy === "newest") {
+      result = [...result].reverse(); // Newest first
+    } else if (sortBy === "oldest") {
+      result = [...result]; // Oldest first (original order)
+    } else if (sortBy === "authority") {
+      result = [...result].sort((a, b) => b.authorityScore - a.authorityScore);
+    }
+
+    setFilteredDocuments(result);
+  }, [documents, activeFilter, searchQuery, sortBy]);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        addToast("File size exceeds 10MB limit", "error");
+        return;
+      }
+      setSelectedFile(file);
+      setIsFileDetailsOpen(true);
+    }
+  };
+
+  const handleUpload = async (details: {
+    type: string;
+    date: string;
+    file?: File;
+  }) => {
+    if (!details.file && !selectedFile) {
+      addToast("No file selected", "error");
+      return;
+    }
+
+    const fileToUpload = details.file || selectedFile;
+    if (!fileToUpload) return;
+
+    try {
+      setIsUploading(true);
+      await uploadDocument(fileToUpload, details.type, details.date);
+      addToast(`✅ ${fileToUpload.name} uploaded successfully`, "success");
+
+      // Refresh documents list
+      await loadDocuments();
 
       // Clean up
       setSelectedFile(null);
+      setIsFileDetailsOpen(false);
       setIsUploadOpen(false);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     } catch (error) {
-      console.error("Upload failed:", error);
-      alert("Failed to upload document. Please try again.");
+      const errorMessage = error instanceof Error ? error.message : "Failed to upload document";
+      addToast(errorMessage, "error");
     } finally {
       setIsUploading(false);
     }
@@ -121,27 +152,46 @@ export default function DocumentsPage() {
           </span>
         }
         actions={
-          <button
-            onClick={() => setIsUploadOpen(!isUploadOpen)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--accent-mint), var(--accent-teal))",
-              boxShadow: "0 4px 14px rgba(0,201,167,0.2)",
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+          <div className="flex gap-2">
+            <button
+              onClick={loadDocuments}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold border border-white/60 glass-panel text-text-primary hover:bg-white/40 transition-all disabled:opacity-50"
             >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-            Upload Documents
-          </button>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36 10 10 0 012.81 3.1M20.62 15.2A9 9 0 005.94 6" />
+              </svg>
+              Refresh
+            </button>
+            <button
+              onClick={() => setIsUploadOpen(!isUploadOpen)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
+              style={{
+                background:
+                  "linear-gradient(135deg, var(--accent-mint), var(--accent-teal))",
+                boxShadow: "0 4px 14px rgba(0,201,167,0.2)",
+              }}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Upload
+            </button>
+          </div>
         }
       />
 
@@ -200,7 +250,7 @@ export default function DocumentsPage() {
       )}
 
       {/* Filter + Search Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex flex-wrap items-center gap-2">
           {["All", "PDF", "DOCX", "TXT", "XLSX"].map((filter) => (
             <button
@@ -217,10 +267,14 @@ export default function DocumentsPage() {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select className="px-3 py-1.5 rounded-lg border border-border glass-panel text-[13px] font-medium outline-none focus:border-accent-mint">
-            <option>Newest ▾</option>
-            <option>Oldest ▾</option>
-            <option>Authority ▾</option>
+          <select 
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-3 py-1.5 rounded-lg border border-border glass-panel text-[13px] font-medium outline-none focus:border-accent-mint"
+          >
+            <option value="newest">Newest ▾</option>
+            <option value="oldest">Oldest ▾</option>
+            <option value="authority">Authority ▾</option>
           </select>
           <div className="relative">
             <svg
@@ -238,6 +292,8 @@ export default function DocumentsPage() {
             <input
               type="text"
               placeholder="Search documents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 pr-4 py-1.5 rounded-full border border-border glass-panel text-[13px] outline-none focus:border-accent-mint w-[200px]"
             />
           </div>
@@ -250,29 +306,36 @@ export default function DocumentsPage() {
           <div className="p-6">
             <LoadingSkeleton variant="table-row" rows={5} />
           </div>
-        ) : documents.length === 0 ? (
-          <EmptyState
-            icon={
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-            }
-            title="No documents yet"
-            description="Upload your first document to get started."
-            action={{
-              label: "Upload Documents",
-              onClick: () => setIsUploadOpen(true),
-            }}
-          />
+        ) : filteredDocuments.length === 0 ? (
+          documents.length === 0 ? (
+            <EmptyState
+              icon={
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              }
+              title="No documents yet"
+              description="Upload your first document to get started."
+              action={{
+                label: "Upload Documents",
+                onClick: () => setIsUploadOpen(true),
+              }}
+            />
+          ) : (
+            <EmptyState
+              title="No matching documents"
+              description="Try adjusting your filters or search query."
+            />
+          )
         ) : (
           <table className="w-full text-left border-collapse">
             <thead>
@@ -298,14 +361,13 @@ export default function DocumentsPage() {
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
                   Status
                 </th>
-                <th className="py-3 px-4 w-10"></th>
               </tr>
             </thead>
             <tbody>
-              {documents.map((doc, index) => (
+              {filteredDocuments.map((doc, index) => (
                 <tr
                   key={doc.id}
-                  className="border-b border-border/50 hover:bg-white/40 transition-colors cursor-pointer group relative"
+                  className="border-b border-border/50 hover:bg-white/40 transition-colors"
                 >
                   <td className="py-3 px-4 text-[12px] font-mono text-text-muted">
                     {index + 1}
@@ -318,7 +380,7 @@ export default function DocumentsPage() {
                           {doc.name}
                         </p>
                         <p className="text-[11px] text-text-muted">
-                          {doc.department}
+                          {doc.department || "—"}
                         </p>
                       </div>
                     </div>
@@ -346,15 +408,6 @@ export default function DocumentsPage() {
                       {doc.status}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-center">
-                    <button className="text-text-muted hover:text-text-primary">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="1" />
-                        <circle cx="19" cy="12" r="1" />
-                        <circle cx="5" cy="12" r="1" />
-                      </svg>
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -374,3 +427,59 @@ export default function DocumentsPage() {
     </div>
   );
 }
+
+      {/* Upload Zone */}
+      {isUploadOpen && (
+        <div
+          className="mb-8 p-8 border-[1.5px] border-dashed rounded-xl transition-all"
+          style={{
+            borderColor: "var(--accent-mint)",
+            backgroundColor: "rgba(0,201,167,0.02)",
+          }}
+        >
+          <div className="flex flex-col items-center justify-center text-center">
+            <svg
+              className="mb-4"
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--accent-mint)"
+              strokeWidth="1.5"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+            <h3
+              className="text-[15px] font-bold mb-1"
+              style={{ color: "var(--text-primary)" }}
+            >
+              Drop files here or click to browse
+            </h3>
+            <p
+              className="text-[11px] mb-4"
+              style={{ color: "var(--text-muted)" }}
+            >
+              Supports PDF, DOCX, TXT, XLSX · Max 10MB per file
+            </p>
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isUploading ? "Uploading..." : "Select Files"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              disabled={isUploading}
+              className="hidden"
+              accept=".pdf,.docx,.txt,.xlsx"
+            />
+          </div>
+        </div>
+      )}
+
+

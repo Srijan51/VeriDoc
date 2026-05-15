@@ -1,12 +1,34 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export default function SearchBar() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const router = useRouter();
+
+  const handleSearch = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    
+    // Navigate to AI Assistant with the query
+    // The AI Assistant page will handle the actual search
+    router.push(`/ai-assistant?q=${encodeURIComponent(searchQuery)}`);
+    
+    setTimeout(() => {
+      setIsSearching(false);
+      setSearchQuery("");
+    }, 500);
+  };
+
   return (
-    <div className="relative group" id="search-bar">
+    <form onSubmit={handleSearch} className="relative group w-full max-w-md">
       <div
-        className="flex items-center gap-3 px-5 py-3.5 rounded-full transition-all duration-200"
+        className="flex items-center gap-3 px-5 py-3.5 rounded-full transition-all duration-200 hover:shadow-lg"
         style={{
           background: "var(--bg-card)",
           border: "1.5px solid var(--accent-mint)",
@@ -30,6 +52,8 @@ export default function SearchBar() {
         {/* Input */}
         <input
           type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Ask VERIDOC anything about your documents..."
           className="flex-1 bg-transparent outline-none text-[15px] placeholder-text-muted"
           style={{
@@ -40,7 +64,9 @@ export default function SearchBar() {
 
         {/* Arrow CTA button */}
         <button
-          className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105"
+          type="submit"
+          disabled={!searchQuery.trim() || isSearching}
+          className="w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             background: "var(--accent-mint)",
           }}
@@ -51,6 +77,6 @@ export default function SearchBar() {
           </svg>
         </button>
       </div>
-    </div>
+    </form>
   );
 }

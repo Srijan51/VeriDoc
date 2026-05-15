@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Source_Sans_3, Montserrat } from "next/font/google";
 import "./globals.css";
+import Sidebar from "@/components/layout/Sidebar";
+import { ToastProvider } from "@/lib/context/ToastContext";
+import { ToastContainer } from "@/components/ui/ToastContainer";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -36,8 +39,6 @@ export const metadata: Metadata = {
   ],
 };
 
-import Sidebar from "@/components/layout/Sidebar";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -49,22 +50,26 @@ export default function RootLayout({
       className={`${playfair.variable} ${sourceSans3.variable} ${montserrat.variable} h-full`}
     >
       <body className="min-h-full flex flex-col antialiased bg-transparent">
-        {/* Animated Glassmorphism Orbs */}
-        <div className="bg-orb-1" />
-        <div className="bg-orb-2" />
+        <ToastProvider>
+          {/* Animated Glassmorphism Orbs */}
+          <div className="bg-orb-1" />
+          <div className="bg-orb-2" />
 
-        <div className="flex min-h-screen w-full">
-          {/* Global Sidebar */}
-          <Sidebar />
+          <div className="flex min-h-screen w-full">
+            {/* Global Sidebar */}
+            <Sidebar />
 
-          {/* Main Layout Area */}
-          <div className="flex-1 flex flex-col ml-[240px] relative">
-            <main className="flex-1 flex flex-col">
-              {children}
-            </main>
+            {/* Main Layout Area */}
+            <div className="flex-1 flex flex-col ml-[240px] relative">
+              <main className="flex-1 flex flex-col">
+                {children}
+              </main>
+            </div>
           </div>
-        </div>
 
+          {/* Toast Notifications */}
+          <ToastContainer />
+        </ToastProvider>
       </body>
     </html>
   );
