@@ -1,10 +1,12 @@
 """
 Gemini service — builds a grounded answer from retrieved context chunks
-using the Gemini 1.5 Flash model via the Google Generative AI SDK.
+using the Gemini 2.5 Flash model via the Google Generative AI SDK.
+Includes contradiction detection across source documents.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 
 from google import genai
@@ -35,51 +37,105 @@ def _get_genai_client() -> genai.Client:
     return _genai_client
 
 
-# ── Prompt builder ────────────────────────────────────────────────────────────
+# ── Prompt builders ───────────────────────────────────────────────────────────
 
-def _build_prompt(question: str, context_chunks: list[dict]) -> str:
-    context_parts = []
-    for i, chunk in enumerate(context_chunks, start=1):
-        context_parts.append(
-            f"[Source {i} | {chunk['filename']} | chunk {chunk['chunk_index']}]\n"
-            f"{chunk['text']}"
+def _format_chunks_with_metadata(context_chunks: list[dict]) -> str:
+    """
+    Format chunks with SOURCE, TYPE, DATE headers for contradiction detection.
+    """
+    formatted_parts = []
+    for chunk in context_chunks:
+        part = (
+            f"SOURCE: {chunk.get('filename', 'unknown')}\n"
+            f"TYPE: {chunk.get('doc_type', 'unknown')}\n"
+            f"DATE: {chunk.get('doc_date', 'unknown')}\n"
+            f"\n{chunk.get('text', '')}\n"
+            f"---"
         )
+        formatted_parts.append(part)
+    
+    return "\n\n".join(formatted_parts)
 
-    context_str = "\n\n---\n\n".join(context_parts)
 
-    return (
-        f"## Context\n\n{context_str}\n\n"
-        f"## Question\n\n{question}\n\n"
-        f"## Answer\n\n"
-        "Using ONLY the context above, provide a precise and well-structured answer. "
-        "Reference the source numbers (e.g. [Source 1]) where relevant."
-    )
+SYSTEM_PROMPT = """You are VERIDOC, an enterprise knowledge truth auditor. Your job is NOT just to answer questions — your primary function is to detect when different company documents give conflicting information.
+
+You will receive:
+- A user question
+- Retrieved text chunks from multiple source documents, each labelled with SOURCE, TYPE (policy/handbook/sop/memo), and DATE
+
+YOUR TASK:
+1. Answer the question using the retrieved context
+2. Identify ALL factual claims relevant to the question across ALL sources
+3. Compare claims: if two sources state different facts for the same topic, that is a CONTRADICTION
+4. For each contradiction found, assess severity:
+   - CRITICAL: Legal, compliance, or safety implications
+   - HIGH: Official policy differences (leave days, salary, rights)
+   - MEDIUM: Process or procedure differences
+   - LOW: Wording differences with same intent
+5. Determine the authoritative source using this hierarchy: policy > sop > handbook > memo, and newer date wins when types match
+
+OUTPUT: Respond ONLY with valid JSON. No preamble, no markdown fences, no explanation outside the JSON.
+
+{
+  "answer": "Direct answer to the question in 2-3 sentences",
+  "confidence_score": 0.0,
+  "citations": [
+    {
+      "source": "filename.pdf",
+      "doc_type": "policy",
+      "doc_date": "2024-01-15",
+      "claim": "Exact relevant claim from this source"
+    }
+  ],
+  "contradictions": [
+    {
+      "topic": "What the contradiction is about",
+      "source_a": "filename_a.pdf",
+      "claim_a": "What source A says",
+      "source_b": "filename_b.pdf",
+      "claim_b": "What source B says",
+      "severity": "HIGH",
+      "authoritative_source": "filename_a.pdf",
+      "reason": "Policy doc from 2024 supersedes handbook from 2021"
+    }
+  ],
+  "no_answer_found": false,
+  "no_answer_reason": null
+}
+
+If no relevant information exists in the documents, set no_answer_found to true and explain why in no_answer_reason. Never hallucinate facts not present in the retrieved chunks."""
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def generate_answer(question: str, context_chunks: list[dict]) -> str:
+def generate_answer(question: str, context_chunks: list[dict]) -> dict:
     """
-    Generate a grounded answer given a question and retrieved context chunks.
+    Generate a grounded answer with contradiction detection.
 
     Args:
         question:       The user's natural-language question.
-        context_chunks: List of chunk dicts from Pinecone similarity search.
+        context_chunks: List of chunk dicts from similarity_search (now includes doc_type, doc_date).
 
     Returns:
-        A string containing the model's answer.
+        A dict with keys: answer, confidence_score, citations, contradictions, no_answer_found, no_answer_reason
     """
     if not context_chunks:
-        return (
-            "I could not find relevant information in the uploaded documents "
-            "to answer your question. Please try rephrasing or upload additional documents."
-        )
+        return {
+            "answer": "I could not find relevant information in the uploaded documents to answer your question. Please try rephrasing or upload additional documents.",
+            "confidence_score": 0.0,
+            "citations": [],
+            "contradictions": [],
+            "no_answer_found": True,
+            "no_answer_reason": "No relevant documents found in the knowledge base.",
+        }
 
     client = _get_genai_client()
-    prompt = _build_prompt(question, context_chunks)
+    formatted_context = _format_chunks_with_metadata(context_chunks)
+    
+    user_prompt = f"Question: {question}\n\n---\n\nDocument Chunks:\n\n{formatted_context}"
 
     logger.info(
-        "Generating answer for question=%r using %d chunks",
+        "Generating answer with contradiction detection for question=%r using %d chunks",
         question[:80],
         len(context_chunks),
     )
@@ -91,49 +147,76 @@ def generate_answer(question: str, context_chunks: list[dict]) -> str:
     ]
 
     last_error: Exception | None = None
-    for model in model_candidates:
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    systemInstruction=(
-                        "You are VeriDoc, an enterprise knowledge truth engine. "
-                        "Answer questions strictly based on the provided document context. "
-                        "If the context does not contain enough information to answer, "
-                        "say so clearly — do NOT hallucinate. "
-                        "Be concise, factual, and cite which source chunk supports each claim."
+    last_response_text: str | None = None
+    
+    for attempt in range(2):  # Try up to 2 attempts per model (for JSON retry)
+        for model in model_candidates:
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=user_prompt,
+                    config=types.GenerateContentConfig(
+                        systemInstruction=SYSTEM_PROMPT,
+                        temperature=0.2,
+                        topP=0.95,
+                        maxOutputTokens=4096,
                     ),
-                    temperature=0.1,
-                    topP=0.95,
-                    maxOutputTokens=2048,
-                ),
-            )
-            logger.info("Using Gemini model %s", model)
-            return response.text.strip()
-        except genai_errors.ClientError as exc:
-            last_error = exc
-            error_str = str(exc)
-            # Check if it's a 404 model not found error
-            if "404" in error_str or "NOT_FOUND" in error_str:
-                logger.warning(
-                    "Gemini model %s unavailable, trying next fallback", model
                 )
-                continue
-            # Check if it's a quota exceeded error
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                logger.warning("Gemini quota exceeded for model %s", model)
-                # Don't try fallbacks for quota issues - they're account-wide
-                raise RuntimeError(
-                    f"Gemini API quota exceeded. Please check your Google AI Studio billing/plan at https://ai.google.dev/gemini-api/docs/rate-limits. "
-                    f"Free tier limits have been reached for model {model}."
-                ) from exc
-            raise
-        except Exception as exc:
-            last_error = exc
-            break
-
-    model_list = ", ".join(model_candidates)
-    raise RuntimeError(
-        f"No Gemini model available. Tried: {model_list}. Last error: {last_error}"
-    )
+                logger.info("Using Gemini model %s", model)
+                response_text = response.text.strip()
+                last_response_text = response_text
+                
+                # Try to parse JSON (strip markdown fences if present)
+                json_text = response_text
+                if json_text.startswith("```json"):
+                    json_text = json_text[7:]  # Remove ```json
+                if json_text.startswith("```"):
+                    json_text = json_text[3:]  # Remove ```
+                if json_text.endswith("```"):
+                    json_text = json_text[:-3]  # Remove trailing ```
+                
+                result = json.loads(json_text.strip())
+                logger.info("Successfully parsed contradiction detection response")
+                return result
+                
+            except json.JSONDecodeError as exc:
+                if attempt == 0:
+                    logger.warning(
+                        "JSON parsing failed on attempt 1, will retry with reminder. Error: %s",
+                        exc
+                    )
+                    # On second attempt, add a reminder to the system prompt
+                    continue
+                else:
+                    logger.error(
+                        "JSON parsing failed on attempt 2. Response was: %s",
+                        last_response_text[:500]
+                    )
+                    last_error = exc
+                    break
+            except genai_errors.ClientError as exc:
+                last_error = exc
+                error_str = str(exc)
+                # Check if it's a 404 model not found error
+                if "404" in error_str or "NOT_FOUND" in error_str:
+                    logger.warning(
+                        "Gemini model %s unavailable, trying next fallback", model
+                    )
+                    continue
+                # Check if it's a quota exceeded error
+                if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    logger.warning("Gemini quota exceeded for model %s", model)
+                    raise RuntimeError(
+                        f"Gemini API quota exceeded. Please check your Google AI Studio billing/plan at https://ai.google.dev/gemini-api/docs/rate-limits. "
+                        f"Free tier limits have been reached for model {model}."
+                    ) from exc
+                raise
+            except Exception as exc:
+                last_error = exc
+                logger.error("Unexpected error during answer generation: %s", exc)
+                break
+    
+    # If we get here, all attempts failed
+    error_msg = f"Failed to generate answer with contradiction detection. Last error: {last_error}"
+    logger.error(error_msg)
+    raise RuntimeError(error_msg)

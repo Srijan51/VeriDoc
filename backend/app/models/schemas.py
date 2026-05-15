@@ -30,10 +30,32 @@ class SourceChunk(BaseModel):
     score: float
 
 
+class Citation(BaseModel):
+    source: str
+    doc_type: str
+    doc_date: str
+    claim: str
+
+
+class Contradiction(BaseModel):
+    topic: str
+    source_a: str
+    claim_a: str
+    source_b: str
+    claim_b: str
+    severity: str  # LOW | MEDIUM | HIGH | CRITICAL
+    authoritative_source: str
+    reason: str
+
+
 class QueryResponse(BaseModel):
     question: str
     answer: str
-    sources: list[SourceChunk]
+    confidence_score: float
+    citations: list[Citation]
+    contradictions: list[Contradiction]
+    no_answer_found: bool
+    no_answer_reason: Optional[str] = None
     model: str = "models/gemini-2.5-flash"
 
 

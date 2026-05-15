@@ -114,19 +114,22 @@ def similarity_search(
 ) -> list[dict]:
     """
     Query Supabase (pgvector) for the most relevant chunks using RPC.
-    Returns a list of dicts with keys: doc_id, filename, chunk_index, text, score
+    The RPC now returns doc_type and doc_date directly via JOIN with documents table.
+    Returns a list of dicts with keys: doc_id, filename, chunk_index, text, score, doc_type, doc_date
     """
     supabase = _get_client()
     query_emb = _embed_query(query)
 
     rpc_params = {
         "query_embedding": query_emb,
-        "match_threshold": 0.0,
+        "match_threshold": -1.0,
         "match_count": top_k,
         "filter_doc_ids": doc_ids if doc_ids else [],
     }
 
+    logger.info("Running similarity search with top_k=%d, filter_doc_ids=%s", top_k, doc_ids)
     response = supabase.rpc("match_document_chunks", rpc_params).execute()
+    logger.info("RPC returned %d results", len(response.data))
 
     results = []
     for match in response.data:
@@ -137,8 +140,14 @@ def similarity_search(
                 "chunk_index": int(match.get("chunk_index", 0)),
                 "text": match.get("text", ""),
                 "score": float(match.get("similarity", 0.0)),
+                "doc_type": match.get("doc_type", "unknown"),
+                "doc_date": match.get("doc_date", "unknown"),
             }
         )
+
+    # Log unique documents found for debugging
+    unique_files = set(r["filename"] for r in results)
+    logger.info("Unique documents in results: %s", unique_files)
 
     return results
 
