@@ -37,7 +37,6 @@ export const metadata: Metadata = {
 };
 
 import Sidebar from "@/components/layout/Sidebar";
-import TopNav from "@/components/layout/TopNav";
 
 export default function RootLayout({
   children,
@@ -53,15 +52,14 @@ export default function RootLayout({
         {/* Animated Glassmorphism Orbs */}
         <div className="bg-orb-1" />
         <div className="bg-orb-2" />
-        
+
         <div className="flex min-h-screen w-full">
           {/* Global Sidebar */}
           <Sidebar />
 
           {/* Main Layout Area */}
           <div className="flex-1 flex flex-col ml-[240px] relative">
-            <TopNav />
-            <main className="flex-1">
+            <main className="flex-1 flex flex-col">
               {children}
             </main>
           </div>

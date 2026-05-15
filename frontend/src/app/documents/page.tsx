@@ -7,6 +7,7 @@ import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 import DocTypeIcon from "@/components/ui/DocTypeIcon";
 import AuthorityBar from "@/components/ui/AuthorityBar";
 import SeverityBadge from "@/components/ui/SeverityBadge";
+import FileDetailsModal from "@/components/ui/FileDetailsModal";
 
 // Represents the expected backend document model
 interface Document {
@@ -25,6 +26,7 @@ export default function DocumentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
+  const [isFileDetailsOpen, setIsFileDetailsOpen] = useState(false);
 
   useEffect(() => {
     // Backend-ready fetch implementation
@@ -119,7 +121,10 @@ export default function DocumentsPage() {
             >
               Supports PDF, DOCX, TXT, XLSX · Max 10MB per file
             </p>
-            <button className="px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 transition-colors">
+            <button 
+              onClick={() => setIsFileDetailsOpen(true)}
+              className="px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 transition-colors"
+            >
               Select Files
             </button>
           </div>
@@ -127,8 +132,8 @@ export default function DocumentsPage() {
       )}
 
       {/* Filter + Search Bar */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <div className="flex flex-wrap items-center gap-2">
           {["All", "PDF", "DOCX", "TXT", "XLSX"].map((filter) => (
             <button
               key={filter}
@@ -143,7 +148,7 @@ export default function DocumentsPage() {
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <select className="px-3 py-1.5 rounded-lg border border-border glass-panel text-[13px] font-medium outline-none focus:border-accent-mint">
             <option>Newest ▾</option>
             <option>Oldest ▾</option>
@@ -288,6 +293,16 @@ export default function DocumentsPage() {
           </table>
         )}
       </div>
+
+      <FileDetailsModal
+        isOpen={isFileDetailsOpen}
+        onClose={() => setIsFileDetailsOpen(false)}
+        onSave={(details) => {
+          console.log("Saved details:", details);
+          setIsFileDetailsOpen(false);
+          setIsUploadOpen(false); // Close upload zone after successful mock upload
+        }}
+      />
     </div>
   );
 }
