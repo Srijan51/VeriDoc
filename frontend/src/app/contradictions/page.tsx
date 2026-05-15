@@ -4,53 +4,58 @@ import React, { useState, useEffect } from "react";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
+import { queryDocuments } from "@/lib/api";
 
-interface Contradiction {
+interface ContradictionCard {
   id: string;
   severity: "critical" | "high" | "medium" | "low";
-  category: string;
-  detectedAt: string;
-  docA: {
-    name: string;
-    department: string;
-    updatedAt: string;
-    statement: string;
-    authorityScore: number;
-  };
-  docB: {
-    name: string;
-    department: string;
-    updatedAt: string;
-    statement: string;
-    authorityScore: number;
-  };
-  impact: string;
-  recommendation: string;
-  resolved: boolean;
+  topic: string;
+  sourceA: string;
+  claimA: string;
+  sourceB: string;
+  claimB: string;
+  authoritySource: string;
+  reason: string;
 }
 
 export default function ContradictionsPage() {
-  const [contradictions, setContradictions] = useState<Contradiction[]>([]);
+  const [contradictions, setContradictions] = useState<ContradictionCard[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeSeverity, setActiveSeverity] = useState("All");
 
   useEffect(() => {
-    // Backend-ready fetch implementation
     const fetchContradictions = async () => {
       try {
         setIsLoading(true);
-        // FIXME: Connect to real backend
-        // const response = await fetch('/api/contradictions');
-        // const data = await response.json();
-        // setContradictions(data);
+        const response = await queryDocuments(
+          "List all contradictions in the documents",
+          [],
+          20
+        );
 
-        // Simulating a backend that returns an empty array initially
-        setTimeout(() => {
-          setContradictions([]);
-          setIsLoading(false);
-        }, 600);
+        // Map the contradictions from the response
+        const mapped = response.contradictions.map((contradiction, idx) => ({
+          id: `contradiction-${idx}`,
+          severity: (contradiction.severity.toUpperCase() === "CRITICAL"
+            ? "critical"
+            : contradiction.severity.toUpperCase() === "HIGH"
+            ? "high"
+            : contradiction.severity.toUpperCase() === "MEDIUM"
+            ? "medium"
+            : "low") as "critical" | "high" | "medium" | "low",
+          topic: contradiction.topic,
+          sourceA: contradiction.source_a,
+          claimA: contradiction.claim_a,
+          sourceB: contradiction.source_b,
+          claimB: contradiction.claim_b,
+          authoritySource: contradiction.authoritative_source,
+          reason: contradiction.reason,
+        }));
+
+        setContradictions(mapped);
       } catch (error) {
         console.error("Failed to fetch contradictions", error);
+      } finally {
         setIsLoading(false);
       }
     };
@@ -188,7 +193,87 @@ export default function ContradictionsPage() {
           />
         ) : (
           <div className="space-y-6">
-            {/* Contradiction Cards will map here once backend provides data */}
+            {contradictions.map((contradiction) => (
+              <div
+                key={contradiction.id}
+                className="glass-card rounded-xl border border-white/60 p-6 shadow-sm"
+                style={{
+                  borderLeftWidth: "4px",
+                  borderLeftColor:
+                    contradiction.severity === "critical"
+                      ? "var(--severity-critical)"
+                      : contradiction.severity === "high"
+                      ? "var(--severity-high)"
+                      : contradiction.severity === "medium"
+                      ? "#F5A623"
+                      : "#8E8E93",
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3
+                      className="text-[15px] font-bold mb-1"
+                      style={{ color: "var(--text-primary)" }}
+                    >
+                      {contradiction.topic}
+                    </h3>
+                    <p className="text-[12px] text-text-muted">
+                      Detected in {contradiction.sourceA} and{" "}
+                      {contradiction.sourceB}
+                    </p>
+                  </div>
+                  <span
+                    className={`px-3 py-1 rounded-full text-[11px] font-bold text-white ${
+                      contradiction.severity === "critical"
+                        ? "bg-severity-critical"
+                        : contradiction.severity === "high"
+                        ? "bg-severity-high"
+                        : contradiction.severity === "medium"
+                        ? "bg-amber-500"
+                        : "bg-gray-500"
+                    }`}
+                  >
+                    {contradiction.severity.toUpperCase()}
+                  </span>
+                </div>
+
+                {/* Contradiction Details */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="p-3 rounded-lg bg-white/20 border border-border/50">
+                    <p className="text-[10px] font-bold text-text-muted mb-2 uppercase tracking-wider">
+                      {contradiction.sourceA}
+                    </p>
+                    <p className="text-[12px] text-text-primary leading-relaxed">
+                      {contradiction.claimA}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-white/20 border border-border/50">
+                    <p className="text-[10px] font-bold text-text-muted mb-2 uppercase tracking-wider">
+                      {contradiction.sourceB}
+                    </p>
+                    <p className="text-[12px] text-text-primary leading-relaxed">
+                      {contradiction.claimB}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="flex items-start justify-between pt-3 border-t border-border/50">
+                  <div>
+                    <p className="text-[10px] font-bold text-text-muted mb-1 uppercase tracking-wider">
+                      Authoritative Source
+                    </p>
+                    <p className="text-[12px] text-text-primary font-medium">
+                      {contradiction.authoritySource}
+                    </p>
+                    <p className="text-[11px] text-text-secondary mt-2">
+                      {contradiction.reason}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -1,35 +1,76 @@
 "use client";
 
 import React, { useState } from "react";
+import { queryDocuments, Citation, Contradiction } from "@/lib/api";
+
+interface AssistantMessage {
+  role: "user" | "assistant";
+  content: string;
+  citations?: Citation[];
+  contradictions?: Contradiction[];
+  noAnswerReason?: string;
+}
 
 export default function AiAssistantPage() {
   const [query, setQuery] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]); // Will hold real data later
+  const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [currentResponse, setCurrentResponse] = useState<{
+    citations: Citation[];
+    contradictions: Contradiction[];
+  } | null>(null);
 
   const handleSend = async () => {
     if (!query.trim()) return;
 
-    // We don't have mock data per the instructions, so we just show the typing indicator
-    // and let it clear out to simulate a backend request waiting for an endpoint.
-
+    const userMessage = query;
     setIsTyping(true);
     setQuery("");
 
     try {
-      // FIXME: Connect to real backend
-      // const response = await fetch('/api/query', { method: 'POST', body: JSON.stringify({ question: query }) });
-      // const data = await response.json();
-      // setMessages(prev => [...prev, { role: 'user', content: query }, { role: 'assistant', ...data }]);
+      // Add user message to chat
+      setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
 
-      // Simulating network delay
-      setTimeout(() => {
-        setIsTyping(false);
-      }, 1000);
+      // Query the backend
+      const response = await queryDocuments(userMessage, [], 5);
+
+      // Add assistant message to chat
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: response.no_answer_found
+            ? response.no_answer_reason || "I could not find an answer to your question."
+            : response.answer,
+          citations: response.citations,
+          contradictions: response.contradictions,
+          noAnswerReason: response.no_answer_reason,
+        },
+      ]);
+
+      // Update the sources panel
+      setCurrentResponse({
+        citations: response.citations,
+        contradictions: response.contradictions,
+      });
     } catch (error) {
-      console.error(error);
+      console.error("Query failed:", error);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Sorry, I encountered an error while processing your query. Please try again.",
+        },
+      ]);
+    } finally {
       setIsTyping(false);
     }
+  };
+
+  const clearChat = () => {
+    setMessages([]);
+    setCurrentResponse(null);
   };
 
   return (
@@ -62,7 +103,10 @@ export default function AiAssistantPage() {
                 Querying across 47 documents
               </p>
             </div>
-            <button className="text-[13px] text-text-muted hover:text-severity-critical transition-colors">
+            <button 
+              onClick={clearChat}
+              className="text-[13px] text-text-muted hover:text-severity-critical transition-colors"
+            >
               Clear Chat
             </button>
           </div>
@@ -107,7 +151,30 @@ export default function AiAssistantPage() {
                       key={suggestion}
                       onClick={() => {
                         setQuery(suggestion);
-                        handleSend();
+                        // Call handleSend on next render with updated query
+                        setTimeout(() => {
+                          setQuery(suggestion);
+                          queryDocuments(suggestion, [], 5).then((response) => {
+                            setMessages([
+                              { role: "user", content: suggestion },
+                              {
+                                role: "assistant",
+                                content: response.no_answer_found
+                                  ? response.no_answer_reason ||
+                                    "I could not find an answer to your question."
+                                  : response.answer,
+                                citations: response.citations,
+                                contradictions: response.contradictions,
+                                noAnswerReason: response.no_answer_reason,
+                              },
+                            ]);
+                            setCurrentResponse({
+                              citations: response.citations,
+                              contradictions: response.contradictions,
+                            });
+                            setQuery("");
+                          });
+                        }, 0);
                       }}
                       className="px-4 py-3 rounded-xl border border-white/60 glass-panel text-[12px] text-text-primary text-left hover:border-accent-mint hover:text-accent-mint transition-colors shadow-sm"
                     >
@@ -118,7 +185,80 @@ export default function AiAssistantPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Real messages would render here */}
+                {/* Contradiction Warning Banner */}
+                {messages.map((msg, idx) => {
+                  if (
+                    msg.role === "assistant" &&
+                    msg.contradictions &&
+                    msg.contradictions.length > 0
+                  ) {
+                    return (
+                      <div
+                        key={`contradiction-banner-${idx}`}
+                        className="p-4 rounded-xl border-l-4 mb-6"
+                        style={{
+                          borderLeftColor: "var(--severity-critical)",
+                          backgroundColor: "rgba(255, 107, 53, 0.1)",
+                          borderColor: "rgba(255, 107, 53, 0.2)",
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <svg
+                            width="18"
+                            height="18"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="var(--severity-critical)"
+                            strokeWidth="2"
+                            className="mt-0.5 flex-shrink-0"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="8" x2="12" y2="12" />
+                            <line x1="12" y1="16" x2="12.01" y2="16" />
+                          </svg>
+                          <div>
+                            <p
+                              className="text-[13px] font-bold mb-2"
+                              style={{ color: "var(--severity-critical)" }}
+                            >
+                              ⚠️ Contradictions Detected
+                            </p>
+                            <div className="space-y-1">
+                              {msg.contradictions.map((contradiction, cidx) => (
+                                <p
+                                  key={cidx}
+                                  className="text-[11px] text-text-secondary"
+                                >
+                                  <strong>{contradiction.topic}</strong> —{" "}
+                                  {contradiction.severity.toUpperCase()}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })}
+
+                {/* Messages */}
+                {messages.map((msg, index) => (
+                  <div key={index} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <div
+                      className={`max-w-md px-4 py-3 rounded-2xl ${
+                        msg.role === "user"
+                          ? "bg-accent-mint text-white rounded-tr-sm"
+                          : "glass-panel border border-white/60 rounded-tl-sm text-text-primary"
+                      }`}
+                    >
+                      <p className="text-[14px] leading-relaxed whitespace-pre-wrap">
+                        {msg.content}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+
                 {isTyping && (
                   <div className="flex justify-start">
                     <div className="glass-panel border border-white/60 rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1 items-center">
@@ -200,11 +340,11 @@ export default function AiAssistantPage() {
               Sources Used
             </h3>
             <span className="px-2 py-0.5 rounded-full bg-bg-primary text-[10px] font-bold border border-border text-text-muted">
-              0
+              {currentResponse?.citations?.length || 0}
             </span>
           </div>
           <div className="flex-1 p-5 overflow-y-auto">
-            {messages.length === 0 ? (
+            {!currentResponse || currentResponse.citations.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
                 <svg
                   className="mb-3"
@@ -224,8 +364,28 @@ export default function AiAssistantPage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {/* Source cards will map here */}
+              <div className="space-y-3">
+                {currentResponse.citations.map((citation, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-lg border border-border/50 bg-white/30 hover:bg-white/50 transition-colors cursor-pointer"
+                  >
+                    <p className="text-[11px] font-bold text-text-primary mb-1">
+                      {citation.source}
+                    </p>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-medium border border-border bg-white/30">
+                        {citation.doc_type}
+                      </span>
+                      <span className="text-[9px] text-text-muted">
+                        {citation.doc_date}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-text-secondary leading-relaxed">
+                      "{citation.claim}"
+                    </p>
+                  </div>
+                ))}
               </div>
             )}
           </div>

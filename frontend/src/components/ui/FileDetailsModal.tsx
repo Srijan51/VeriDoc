@@ -5,7 +5,8 @@ import React, { useState } from "react";
 interface FileDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (details: { type: string; date: string }) => void;
+  onSave: (details: { type: string; date: string; file?: File }) => void;
+  selectedFile?: File;
 }
 
 const documentTypes = [
@@ -19,6 +20,7 @@ export default function FileDetailsModal({
   isOpen,
   onClose,
   onSave,
+  selectedFile,
 }: FileDetailsModalProps) {
   const [selectedType, setSelectedType] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>("");
@@ -26,7 +28,7 @@ export default function FileDetailsModal({
   if (!isOpen) return null;
 
   const handleSave = () => {
-    onSave({ type: selectedType, date: selectedDate });
+    onSave({ type: selectedType, date: selectedDate, file: selectedFile });
     // Reset state for next open
     setSelectedType("");
     setSelectedDate("");

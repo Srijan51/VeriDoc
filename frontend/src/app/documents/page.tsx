@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
@@ -8,6 +8,7 @@ import DocTypeIcon from "@/components/ui/DocTypeIcon";
 import AuthorityBar from "@/components/ui/AuthorityBar";
 import SeverityBadge from "@/components/ui/SeverityBadge";
 import FileDetailsModal from "@/components/ui/FileDetailsModal";
+import { fetchDocuments, uploadDocument } from "@/lib/api";
 
 // Represents the expected backend document model
 interface Document {
@@ -27,30 +28,88 @@ export default function DocumentsPage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState("All");
   const [isFileDetailsOpen, setIsFileDetailsOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Backend-ready fetch implementation
-    const fetchDocuments = async () => {
+    const loadDocuments = async () => {
       try {
         setIsLoading(true);
-        // FIXME: Connect to real backend
-        // const response = await fetch('/api/documents');
-        // const data = await response.json();
-        // setDocuments(data);
-
-        // Simulating a backend that returns an empty array initially
-        setTimeout(() => {
-          setDocuments([]);
-          setIsLoading(false);
-        }, 600);
+        const response = await fetchDocuments();
+        const mapped = response.documents.map((doc) => ({
+          id: doc.doc_id,
+          name: doc.filename,
+          type: doc.file_type,
+          department: "",
+          uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
+          authorityScore: 80,
+          conflicts: 0,
+          status: "Active" as const,
+        }));
+        setDocuments(mapped);
       } catch (error) {
         console.error("Failed to fetch documents", error);
+      } finally {
         setIsLoading(false);
       }
     };
 
-    fetchDocuments();
+    loadDocuments();
   }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setIsFileDetailsOpen(true);
+    }
+  };
+
+  const handleUpload = async (details: {
+    type: string;
+    date: string;
+    file?: File;
+  }) => {
+    if (!details.file && !selectedFile) {
+      console.error("No file selected");
+      return;
+    }
+
+    const fileToUpload = details.file || selectedFile;
+    if (!fileToUpload) return;
+
+    try {
+      setIsUploading(true);
+      await uploadDocument(fileToUpload, details.type, details.date);
+
+      // Refresh documents list
+      const response = await fetchDocuments();
+      const mapped = response.documents.map((doc) => ({
+        id: doc.doc_id,
+        name: doc.filename,
+        type: doc.file_type,
+        department: "",
+        uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
+        authorityScore: 80,
+        conflicts: 0,
+        status: "Active" as const,
+      }));
+      setDocuments(mapped);
+
+      // Clean up
+      setSelectedFile(null);
+      setIsUploadOpen(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Failed to upload document. Please try again.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-8 animate-fade-in">
@@ -122,11 +181,20 @@ export default function DocumentsPage() {
               Supports PDF, DOCX, TXT, XLSX · Max 10MB per file
             </p>
             <button 
-              onClick={() => setIsFileDetailsOpen(true)}
-              className="px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Select Files
+              {isUploading ? "Uploading..." : "Select Files"}
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              disabled={isUploading}
+              className="hidden"
+              accept=".pdf,.docx,.txt,.xlsx"
+            />
           </div>
         </div>
       )}
@@ -296,12 +364,12 @@ export default function DocumentsPage() {
 
       <FileDetailsModal
         isOpen={isFileDetailsOpen}
-        onClose={() => setIsFileDetailsOpen(false)}
-        onSave={(details) => {
-          console.log("Saved details:", details);
+        onClose={() => {
           setIsFileDetailsOpen(false);
-          setIsUploadOpen(false); // Close upload zone after successful mock upload
+          setSelectedFile(null);
         }}
+        onSave={handleUpload}
+        selectedFile={selectedFile || undefined}
       />
     </div>
   );
