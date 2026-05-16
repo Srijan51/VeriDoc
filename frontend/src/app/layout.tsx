@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { Playfair_Display, Source_Sans_3, Montserrat } from "next/font/google";
 import "./globals.css";
-import Sidebar from "@/components/layout/Sidebar";
 import { ToastProvider } from "@/lib/context/ToastContext";
 import { ToastContainer } from "@/components/ui/ToastContainer";
+import { AuthProvider } from "@/lib/context/AuthContext";
+import AuthLayoutShell from "@/components/layout/AuthLayoutShell";
 
 const playfair = Playfair_Display({
   variable: "--font-playfair",
@@ -51,24 +52,16 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col antialiased bg-transparent">
         <ToastProvider>
-          {/* Animated Glassmorphism Orbs */}
-          <div className="bg-orb-1" />
-          <div className="bg-orb-2" />
+          <AuthProvider>
+            {/* Animated Glassmorphism Orbs */}
+            <div className="bg-orb-1" />
+            <div className="bg-orb-2" />
 
-          <div className="flex min-h-screen w-full">
-            {/* Global Sidebar */}
-            <Sidebar />
+            <AuthLayoutShell>{children}</AuthLayoutShell>
 
-            {/* Main Layout Area */}
-            <div className="flex-1 flex flex-col ml-[240px] relative">
-              <main className="flex-1 flex flex-col">
-                {children}
-              </main>
-            </div>
-          </div>
-
-          {/* Toast Notifications */}
-          <ToastContainer />
+            {/* Toast Notifications */}
+            <ToastContainer />
+          </AuthProvider>
         </ToastProvider>
       </body>
     </html>

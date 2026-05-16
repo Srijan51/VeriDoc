@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { fetchDocuments, queryDocuments, Citation, Contradiction } from "@/lib/api";
+import { fetchDocuments, queryDocuments, Citation, Contradiction, getDocumentViewUrl } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
 
 interface AssistantMessage {
@@ -43,6 +43,7 @@ export default function AiAssistantPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [currentResponse, setCurrentResponse] = useState<{ citations: Citation[]; contradictions: Contradiction[] } | null>(null);
+  const [documents, setDocuments] = useState<{ doc_id: string; filename: string }[]>([]);
   const [documentCount, setDocumentCount] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -97,8 +98,10 @@ export default function AiAssistantPage() {
     const loadCount = async () => {
       try {
         const response = await fetchDocuments();
+        setDocuments(response.documents);
         setDocumentCount(response.total);
       } catch {
+        setDocuments([]);
         setDocumentCount(0);
       }
     };
@@ -396,8 +399,37 @@ export default function AiAssistantPage() {
             ) : (
               <div className="space-y-3">
                 {currentResponse.citations.map((citation, idx) => (
-                  <div key={idx} className="p-3 rounded-lg border border-border/50 bg-white/30 hover:bg-white/50 transition-colors cursor-pointer">
-                    <p className="text-[11px] font-bold text-text-primary mb-1">{citation.source}</p>
+                  <div 
+                    key={idx} 
+                    onClick={async () => {
+                      const doc = documents.find(d => d.filename === citation.source);
+                      if (!doc) {
+                        addToast(`Original file not found for ${citation.source}`, "error");
+                        return;
+                      }
+                      try {
+                        const response = await getDocumentViewUrl(doc.doc_id);
+                        const isPdf = response.filename.toLowerCase().endsWith(".pdf");
+                        if (isPdf) {
+                          window.open(`https://docs.google.com/gview?url=${encodeURIComponent(response.url)}&embedded=true`, "_blank");
+                        } else {
+                          window.open(response.url, "_blank");
+                        }
+                      } catch (error) {
+                        const msg = error instanceof Error ? error.message : "Failed to open document";
+                        addToast(msg, "error");
+                      }
+                    }}
+                    className="p-3 rounded-lg border border-border/50 bg-white/30 hover:bg-white/50 transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <p className="text-[11px] font-bold text-text-primary break-all">{citation.source}</p>
+                      <svg className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 text-accent-mint" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </div>
                     <div className="flex items-center gap-2 mb-2">
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-medium border border-border bg-white/30">{citation.doc_type}</span>
                       <span className="text-[9px] text-text-muted">{citation.doc_date}</span>

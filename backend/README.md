@@ -97,6 +97,8 @@ uvicorn app.main:app --reload --port 8000
 Server runs at **http://localhost:8000**  
 Interactive docs at **http://localhost:8000/docs**
 
+> Supabase email templates are managed in the Supabase Dashboard: **Authentication → Email Templates**. Keep custom HTML there instead of in this README.
+
 ---
 
 ## API Reference

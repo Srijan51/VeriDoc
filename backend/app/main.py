@@ -6,7 +6,7 @@ FastAPI application entry point.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -14,6 +14,7 @@ from app.config import get_settings
 from app.routers import query, documents, upload
 from app.services.storage import get_all_documents, delete_document_metadata
 from app.services.embeddings import delete_document_vectors
+from app.services.auth import get_current_user
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -72,13 +73,14 @@ def create_app() -> FastAPI:
     @app.delete(
         "/documents",
         status_code=status.HTTP_200_OK,
-        summary="Delete all documents and their vectors",
+        summary="Delete all documents for the current user",
         tags=["documents"],
     )
-    async def delete_all_documents() -> dict:
-        """Remove all documents and their associated vector embeddings."""
+    async def delete_all_documents(request: Request) -> dict:
+        """Remove all documents and their associated vector embeddings for the authenticated user."""
+        user_id = get_current_user(request)
         try:
-            rows = get_all_documents()
+            rows = get_all_documents(user_id=user_id)
             deleted = 0
             for row in rows:
                 doc_id = row["doc_id"]
@@ -106,15 +108,26 @@ def create_app() -> FastAPI:
         summary="Delete a single document and its vectors",
         tags=["documents"],
     )
-    async def delete_single_document(doc_id: str) -> dict:
+    async def delete_single_document(doc_id: str, request: Request) -> dict:
         """Remove a specific document and its associated vector embeddings."""
+        user_id = get_current_user(request)
         try:
+            # Verify the document belongs to the current user
+            from app.services.storage import get_document_by_id
+            doc = get_document_by_id(doc_id)
+            if not doc or doc.get("user_id") != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Document not found",
+                )
             try:
                 delete_document_vectors(doc_id)
             except Exception:
                 logger.warning("Failed to delete vectors for doc_id=%s", doc_id)
             delete_document_metadata(doc_id)
             return {"deleted": 1, "message": f"Deleted document {doc_id}"}
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.exception("Failed to delete document %s", doc_id)
             raise HTTPException(

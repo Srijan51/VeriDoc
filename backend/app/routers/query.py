@@ -7,11 +7,13 @@ and generates a grounded answer via Gemini with contradiction detection.
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.models.schemas import QueryRequest, QueryResponse, Citation, Contradiction
 from app.services.embeddings import similarity_search
 from app.services.groq import generate_answer, GENERATION_MODEL
+from app.services.auth import get_current_user
+from app.services.storage import get_all_documents
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])
@@ -22,7 +24,7 @@ router = APIRouter(prefix="/query", tags=["query"])
     response_model=QueryResponse,
     summary="Query the knowledge base",
 )
-async def query_documents(body: QueryRequest) -> QueryResponse:
+async def query_documents(body: QueryRequest, request: Request) -> QueryResponse:
     """
     Ask a natural-language question against your indexed documents.
     Returns an answer with contradiction detection across sources.
@@ -31,10 +33,34 @@ async def query_documents(body: QueryRequest) -> QueryResponse:
     - **doc_ids**: (Optional) Restrict search to specific documents.
     - **top_k**: (Optional) How many source chunks to retrieve (1-20, default 5).
     """
+    user_id = get_current_user(request)
+
+    # Get user's document IDs to scope the query
+    user_docs = get_all_documents(user_id=user_id)
+    user_doc_ids = [d["doc_id"] for d in user_docs]
+
+    # If user specified doc_ids, filter to only their documents
+    if body.doc_ids:
+        query_doc_ids = [did for did in body.doc_ids if did in user_doc_ids]
+    else:
+        query_doc_ids = user_doc_ids
+
+    if not query_doc_ids:
+        return QueryResponse(
+            question=body.question,
+            answer="You don't have any documents uploaded yet. Please upload documents first.",
+            confidence_score=0.0,
+            citations=[],
+            contradictions=[],
+            no_answer_found=True,
+            no_answer_reason="No documents available for the current user.",
+            model=GENERATION_MODEL,
+        )
+
     try:
         chunks = similarity_search(
             query=body.question,
-            doc_ids=body.doc_ids if body.doc_ids else None,
+            doc_ids=query_doc_ids,
             top_k=body.top_k,
         )
     except Exception as exc:

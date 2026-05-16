@@ -8,13 +8,14 @@ import uuid
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException, status, Request
 from datetime import datetime
 
 from app.models.schemas import UploadResponse
 from app.services.document_processor import process_document, SUPPORTED_TYPES
 from app.services.embeddings import upsert_chunks
-from app.services.storage import store_in_supabase
+from app.services.storage import store_in_supabase, upload_file_to_storage, update_document_file_path
+from app.services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["upload"])
@@ -27,6 +28,7 @@ router = APIRouter(tags=["upload"])
     summary="Upload a document for indexing",
 )
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     doc_type: str = Form(...),
     doc_date: str = Form(...),
@@ -86,6 +88,7 @@ async def upload_document(
 
     doc_id = str(uuid.uuid4())
     filename = Path(file.filename).name if file.filename else f"{doc_id}.bin"
+    user_id = get_current_user(request)
 
     # Process document
     try:
@@ -125,6 +128,7 @@ async def upload_document(
             file_type=SUPPORTED_TYPES[content_type],
             chunk_count=len(chunks),
             size_bytes=len(file_bytes),
+            user_id=user_id,
         )
     except Exception as exc:
         logger.exception("Failed to persist metadata in Supabase")
@@ -146,6 +150,20 @@ async def upload_document(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Vector indexing failed: {exc}",
         )
+
+    # Store original file in Supabase Storage for later viewing
+    try:
+        file_path = upload_file_to_storage(
+            user_id=user_id,
+            doc_id=doc_id,
+            filename=filename,
+            file_bytes=file_bytes,
+            content_type=content_type,
+        )
+        update_document_file_path(doc_id, file_path)
+    except Exception as exc:
+        # Non-fatal — document is still indexed, just can't be viewed
+        logger.warning("Failed to store file in storage (doc_id=%s): %s", doc_id, exc)
 
     return UploadResponse(
         doc_id=doc_id,

@@ -9,7 +9,7 @@ import AuthorityBar from "@/components/ui/AuthorityBar";
 import SeverityBadge from "@/components/ui/SeverityBadge";
 import FileDetailsModal from "@/components/ui/FileDetailsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { fetchDocuments, uploadDocument, deleteDocument } from "@/lib/api";
+import { fetchDocuments, uploadDocument, deleteDocument, getDocumentViewUrl } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
 
 // Represents the expected backend document model
@@ -42,21 +42,45 @@ export default function DocumentsPage() {
   const { addToast } = useToast();
   const hasLoadedRef = useRef(false);
 
+  const DOCS_CACHE_KEY = "veridoc_docs_cache";
+
+  const mapDocuments = (docs: { doc_id: string; filename: string; file_type: string; uploaded_at: string }[]) =>
+    docs.map((doc) => ({
+      id: doc.doc_id,
+      name: doc.filename,
+      type: doc.file_type,
+      department: "",
+      uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
+      authorityScore: 80,
+      conflicts: 0,
+      status: "Active" as const,
+    }));
+
   const loadDocuments = useCallback(async (showToast = false) => {
     try {
-      setIsLoading(true);
+      // Show cached data instantly while fetching fresh data
+      if (!showToast) {
+        try {
+          const cached = sessionStorage.getItem(DOCS_CACHE_KEY);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            setDocuments(mapDocuments(parsed));
+            setIsLoading(false); // Remove spinner immediately
+          }
+        } catch { /* ignore cache errors */ }
+      } else {
+        setIsLoading(true);
+      }
+
       const response = await fetchDocuments();
-      const mapped = response.documents.map((doc) => ({
-        id: doc.doc_id,
-        name: doc.filename,
-        type: doc.file_type,
-        department: "",
-        uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
-        authorityScore: 80,
-        conflicts: 0,
-        status: "Active" as const,
-      }));
+      const mapped = mapDocuments(response.documents);
       setDocuments(mapped);
+
+      // Cache the raw response for next visit
+      try {
+        sessionStorage.setItem(DOCS_CACHE_KEY, JSON.stringify(response.documents));
+      } catch { /* ignore storage errors */ }
+
       if (showToast) {
         addToast(`Loaded ${mapped.length} document(s)`, "success");
       }
@@ -150,6 +174,25 @@ export default function DocumentsPage() {
       addToast(errorMessage, "error");
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleViewDoc = async (docId: string) => {
+    try {
+      const response = await getDocumentViewUrl(docId);
+      const url = response.url;
+      const isPdf = response.filename.toLowerCase().endsWith(".pdf");
+      
+      if (isPdf) {
+        // Open PDF in Google Docs Viewer for in-browser viewing
+        window.open(`https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`, "_blank");
+      } else {
+        // Direct download for DOCX/TXT
+        window.open(url, "_blank");
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to generate view URL. The original file might not be stored.";
+      addToast(msg, "error");
     }
   };
 
@@ -489,12 +532,20 @@ export default function DocumentsPage() {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => setDeleteTarget({ id: doc.id, name: doc.name })}
-                      className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-severity-critical border border-severity-critical/30 hover:bg-severity-critical hover:text-white transition-all"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => handleViewDoc(doc.id)}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-text-primary border border-border hover:bg-white/40 transition-all"
+                      >
+                        View
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget({ id: doc.id, name: doc.name })}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-severity-critical border border-severity-critical/30 hover:bg-severity-critical hover:text-white transition-all"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

@@ -37,16 +37,17 @@ def _get_genai_client() -> genai.Client:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+import concurrent.futures
+
 def _embed_texts(texts: list[str]) -> list[list[float]]:
     """
-    Embed a list of strings using Google's text-embedding-004 model.
-    google-genai 1.x does not support batched embed_content reliably,
-    so we call once per text and collect results.
+    Embed a list of strings using Google's text-embedding model.
+    Since google-genai 1.x does not support batched embed_content reliably,
+    we run the single-text calls in parallel using a ThreadPoolExecutor.
     """
     client = _get_genai_client()
-    embeddings: list[list[float]] = []
 
-    for text in texts:
+    def _embed_single(text: str) -> list[float]:
         result = client.models.embed_content(
             model=EMBED_MODEL,
             contents=text,
@@ -55,7 +56,11 @@ def _embed_texts(texts: list[str]) -> list[list[float]]:
                 output_dimensionality=EMBEDDING_DIM,
             ),
         )
-        embeddings.append(result.embeddings[0].values)
+        return result.embeddings[0].values
+
+    # Run up to 15 concurrent requests to speed up embedding massively
+    with concurrent.futures.ThreadPoolExecutor(max_workers=15) as executor:
+        embeddings = list(executor.map(_embed_single, texts))
 
     return embeddings
 

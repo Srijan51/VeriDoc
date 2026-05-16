@@ -52,6 +52,7 @@ def save_document_metadata(
     file_type: str,
     chunk_count: int,
     size_bytes: int | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """
     Insert a new document record.
@@ -67,22 +68,26 @@ def save_document_metadata(
         "size_bytes": size_bytes,
         "uploaded_at": _now_iso(),
     }
+    if user_id:
+        row["user_id"] = user_id
     response = client.table("documents").insert(row).execute()
-    logger.info("Saved metadata for doc_id=%s", doc_id)
+    logger.info("Saved metadata for doc_id=%s (user=%s)", doc_id, user_id)
     return response.data[0] if response.data else row
 
 
-def get_all_documents() -> list[dict]:
+def get_all_documents(user_id: str | None = None) -> list[dict]:
     """
-    Fetch all documents ordered by upload time (newest first).
+    Fetch documents ordered by upload time (newest first).
+    If user_id is provided, only return documents for that user.
+    Selects only the columns needed by the frontend for performance.
     """
     client = _get_client()
-    response = (
-        client.table("documents")
-        .select("*")
-        .order("uploaded_at", desc=True)
-        .execute()
+    query = client.table("documents").select(
+        "doc_id, filename, file_type, chunk_count, uploaded_at, size_bytes"
     )
+    if user_id:
+        query = query.eq("user_id", user_id)
+    response = query.order("uploaded_at", desc=True).execute()
     return response.data or []
 
 
@@ -116,6 +121,7 @@ def store_in_supabase(
     file_type: str,
     chunk_count: int,
     size_bytes: int | None = None,
+    user_id: str | None = None,
 ) -> dict:
     """Persist document metadata into Supabase."""
     client = _get_client()
@@ -129,6 +135,66 @@ def store_in_supabase(
         "size_bytes": size_bytes,
         "uploaded_at": _now_iso(),
     }
+    if user_id:
+        row["user_id"] = user_id
     response = client.table("documents").insert(row).execute()
-    logger.info("Stored document metadata for doc_id=%s", doc_id)
+    logger.info("Stored document metadata for doc_id=%s (user=%s)", doc_id, user_id)
     return response.data[0] if response.data else row
+
+
+# ── File Storage (Supabase Storage Bucket) ────────────────────────────────────
+
+STORAGE_BUCKET = "documents"
+
+
+def upload_file_to_storage(
+    user_id: str,
+    doc_id: str,
+    filename: str,
+    file_bytes: bytes,
+    content_type: str,
+) -> str:
+    """
+    Upload the original file to Supabase Storage.
+    Returns the storage path (used to generate signed URLs later).
+    """
+    client = _get_client()
+    file_path = f"{user_id}/{doc_id}/{filename}"
+
+    client.storage.from_(STORAGE_BUCKET).upload(
+        path=file_path,
+        file=file_bytes,
+        file_options={"content-type": content_type},
+    )
+
+    logger.info("Uploaded file to storage: %s", file_path)
+    return file_path
+
+
+def get_file_signed_url(file_path: str, expires_in: int = 3600) -> str:
+    """
+    Generate a time-limited signed URL for a file in Supabase Storage.
+    Default expiry: 1 hour (3600 seconds).
+    """
+    client = _get_client()
+    result = client.storage.from_(STORAGE_BUCKET).create_signed_url(
+        path=file_path,
+        expires_in=expires_in,
+    )
+
+    if result and "signedURL" in result:
+        return result["signedURL"]
+
+    # Fallback for different response shapes
+    if isinstance(result, dict) and "signedUrl" in result:
+        return result["signedUrl"]
+
+    raise ValueError(f"Could not generate signed URL for {file_path}")
+
+
+def update_document_file_path(doc_id: str, file_path: str) -> None:
+    """Update the file_path column for a document."""
+    client = _get_client()
+    client.table("documents").update({"file_path": file_path}).eq("doc_id", doc_id).execute()
+    logger.info("Updated file_path for doc_id=%s", doc_id)
+

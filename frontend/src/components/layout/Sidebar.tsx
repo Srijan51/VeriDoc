@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useToast } from "@/lib/hooks/useToast";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 interface NavItem {
   id: string;
@@ -76,7 +76,24 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { addToast } = useToast();
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
+  };
+
+  // Extract display info from user
+  const userEmail = user?.email || "";
+  const userName = user?.user_metadata?.full_name || "";
+  const displayName = userName || userEmail.split("@")[0] || "User";
+  const initials = displayName
+    .split(" ")
+    .map((n: string) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <aside
@@ -187,11 +204,38 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {/* Bottom CTA - Sign In */}
-      <div className="px-3 pb-5 pt-4">
+      {/* Bottom — User Info + Sign Out */}
+      <div className="px-3 pb-5 pt-4 border-t border-white/30">
+        {/* User Info */}
+        <div className="flex items-center gap-3 px-2 mb-3">
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+            style={{
+              background: "linear-gradient(135deg, var(--accent-mint), var(--accent-teal))",
+            }}
+          >
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-[12px] font-semibold truncate"
+              style={{ color: "var(--text-primary)", fontFamily: "var(--font-body), system-ui, sans-serif" }}
+            >
+              {displayName}
+            </p>
+            <p
+              className="text-[10px] truncate"
+              style={{ color: "var(--text-muted)", fontFamily: "var(--font-body), system-ui, sans-serif" }}
+            >
+              {userEmail}
+            </p>
+          </div>
+        </div>
+
+        {/* Sign Out Button */}
         <button
-          id="sidebar-sign-in"
-          onClick={() => addToast("Authentication coming soon!", "info")}
+          id="sidebar-sign-out"
+          onClick={handleSignOut}
           className="w-full flex items-center justify-center gap-2 px-4 h-[36px] rounded-xl transition-all hover:opacity-85 hover:shadow-md"
           style={{
             background: "var(--text-primary)",
@@ -199,21 +243,13 @@ export default function Sidebar() {
             fontFamily: "var(--font-body), system-ui, sans-serif",
           }}
         >
-          <span className="text-[13px] font-medium">Sign In</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="5" y1="12" x2="19" y2="12" />
-            <polyline points="12 5 19 12 12 19" />
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
+          <span className="text-[13px] font-medium">Sign Out</span>
         </button>
-        <div className="mt-3 text-center">
-          <button
-            onClick={() => addToast("Registration coming soon!", "info")}
-            className="text-[11px] font-medium hover:underline transition-colors"
-            style={{ color: "var(--accent-mint)" }}
-          >
-            New here? Create account
-          </button>
-        </div>
       </div>
     </aside>
   );

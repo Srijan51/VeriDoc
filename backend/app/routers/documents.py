@@ -1,15 +1,18 @@
 """
 GET /documents
-Returns metadata for all uploaded documents from Supabase.
+Returns metadata for documents belonging to the authenticated user.
+GET /documents/{doc_id}/url
+Returns a signed URL to view/download a document.
 """
 
 import logging
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.models.schemas import DocumentMeta, DocumentListResponse
-from app.services.storage import get_all_documents
+from app.services.storage import get_all_documents, get_document_by_id, get_file_signed_url
+from app.services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -18,16 +21,18 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 @router.get(
     "",
     response_model=DocumentListResponse,
-    summary="List all uploaded documents",
+    summary="List uploaded documents for the current user",
 )
-async def list_documents() -> DocumentListResponse:
+async def list_documents(request: Request) -> DocumentListResponse:
     """
-    Retrieve metadata for every document that has been uploaded and indexed.
+    Retrieve metadata for documents uploaded by the authenticated user.
 
     Returns documents ordered newest-first.
     """
+    user_id = get_current_user(request)
+
     try:
-        rows = get_all_documents()
+        rows = get_all_documents(user_id=user_id)
     except Exception as exc:
         logger.exception("Failed to fetch documents from Supabase")
         raise HTTPException(
@@ -48,3 +53,44 @@ async def list_documents() -> DocumentListResponse:
     ]
 
     return DocumentListResponse(documents=docs, total=len(docs))
+
+
+@router.get(
+    "/{doc_id}/url",
+    summary="Get a signed URL to view/download a document",
+)
+async def get_document_url(doc_id: str, request: Request) -> dict:
+    """
+    Returns a time-limited signed URL for viewing/downloading the original document.
+    The URL expires after 1 hour.
+    """
+    user_id = get_current_user(request)
+
+    # Fetch the document and verify ownership
+    doc = get_document_by_id(doc_id)
+    if not doc or doc.get("user_id") != user_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    file_path = doc.get("file_path")
+    if not file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Original file is not available for this document",
+        )
+
+    try:
+        signed_url = get_file_signed_url(file_path)
+        return {
+            "url": signed_url,
+            "filename": doc.get("filename", ""),
+            "file_type": doc.get("file_type", ""),
+        }
+    except Exception as exc:
+        logger.exception("Failed to generate signed URL for doc_id=%s", doc_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Could not generate file URL: {exc}",
+        )
