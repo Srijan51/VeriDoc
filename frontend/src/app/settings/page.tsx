@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from "react";
 import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import ConfirmModal from "@/components/ui/ConfirmModal";
+import { deleteAllDocuments, healthCheck } from "@/lib/api";
+import { useToast } from "@/lib/hooks/useToast";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("Profile");
@@ -18,41 +20,66 @@ export default function SettingsPage() {
   // Modals
   const [isDangerModalOpen, setIsDangerModalOpen] = useState(false);
   const [dangerActionType, setDangerActionType] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
+  const [avatarColor, setAvatarColor] = useState("#00C9A7");
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const { addToast } = useToast();
 
   useEffect(() => {
-    // Backend-ready fetch for profile
-    const fetchProfile = async () => {
+    // Load profile from localStorage
+    const saved = localStorage.getItem("veridoc_profile");
+    if (saved) {
       try {
-        // FIXME: Replace with real API
-        // const res = await fetch('/api/settings/profile');
-        // const data = await res.json();
-        // setProfileData(data);
-
-        // Simulating backend response
-        setProfileData({
-          name: "Jane Doe",
-          email: "jane@example.com",
-          role: "Admin",
-        });
-      } catch (error) {
-        console.error(error);
+        setProfileData(JSON.parse(saved));
+      } catch {
+        // Ignore corrupt data
       }
-    };
-    fetchProfile();
+    } else {
+      setProfileData({ name: "Admin", email: "admin@company.com", role: "Admin" });
+    }
+
+    const savedColor = localStorage.getItem("veridoc_avatar_color");
+    if (savedColor) setAvatarColor(savedColor);
+
+    // Check backend connectivity
+    healthCheck()
+      .then(() => setBackendStatus("online"))
+      .catch(() => setBackendStatus("offline"));
   }, []);
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      // await fetch('/api/settings/profile', { method: 'PATCH', body: JSON.stringify(profileData) });
-      setTimeout(() => setIsSaving(false), 500);
+      localStorage.setItem("veridoc_profile", JSON.stringify(profileData));
+      localStorage.setItem("veridoc_avatar_color", avatarColor);
+      addToast("Profile saved", "success");
     } catch (error) {
-      console.error(error);
-      setIsSaving(false);
+      addToast("Failed to save profile", "error");
+    } finally {
+      setTimeout(() => setIsSaving(false), 300);
     }
   };
 
-  const navItems = ["Profile", "Security", "History", "Reset"];
+  const handleDangerAction = async () => {
+    setIsDangerModalOpen(false);
+    if (dangerActionType === "delete_docs") {
+      setIsDeleting(true);
+      try {
+        const result = await deleteAllDocuments();
+        addToast(result.message, "success");
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to delete documents";
+        addToast(msg, "error");
+      } finally {
+        setIsDeleting(false);
+      }
+    } else {
+      addToast("This feature is not available yet", "info");
+    }
+  };
+
+  const navItems = ["Profile", "System", "Reset"];
 
   return (
     <div className="w-full py-8 px-8 animate-fade-in flex gap-16">
@@ -109,12 +136,13 @@ export default function SettingsPage() {
 
             <div className="flex items-center gap-6 mb-10 p-6 glass-card rounded-2xl shadow-sm">
               <div
-                className="w-16 h-16 rounded-full bg-accent-mint flex items-center justify-center text-white font-bold text-[22px]"
+                className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-[22px] transition-colors duration-300"
                 style={{
                   fontFamily: "var(--font-heading), system-ui, sans-serif",
+                  backgroundColor: avatarColor,
                 }}
               >
-                {profileData.name ? profileData.name.charAt(0) : "U"}
+                {profileData.name ? profileData.name.charAt(0).toUpperCase() : "U"}
               </div>
               <div>
                 <p className="text-[16px] font-bold text-text-primary">
@@ -123,9 +151,41 @@ export default function SettingsPage() {
                 <p className="text-[13px] text-text-muted mb-3">
                   {profileData.email || "user@example.com"}
                 </p>
-                <button className="px-4 py-2 rounded-lg text-[12px] font-semibold border border-white/60 hover:bg-white/40 transition-colors glass-panel shadow-sm">
-                  Change Avatar
-                </button>
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowColorPicker(!showColorPicker)}
+                    className="px-4 py-2 rounded-lg text-[12px] font-semibold border border-white/60 hover:bg-white/40 hover:border-accent-mint/40 transition-all glass-panel shadow-sm"
+                  >
+                    Change Avatar
+                  </button>
+                  {showColorPicker && (
+                    <div className="absolute top-full left-0 mt-2 p-3 rounded-xl glass-card border border-white/60 shadow-lg z-10 animate-scale-in">
+                      <p className="text-[10px] font-bold text-text-muted mb-2 uppercase tracking-wider">Choose Color</p>
+                      <div className="flex gap-2 flex-wrap" style={{ width: '152px' }}>
+                        {[
+                          "#00C9A7", "#00897B", "#7C3AED", "#38BDF8",
+                          "#FF6B35", "#F5A623", "#FF3B3B", "#1A1A1A",
+                        ].map((color) => (
+                          <button
+                            key={color}
+                            onClick={() => {
+                              setAvatarColor(color);
+                              localStorage.setItem("veridoc_avatar_color", color);
+                              setShowColorPicker(false);
+                              addToast("Avatar color updated", "success");
+                            }}
+                            className="w-7 h-7 rounded-full border-2 transition-all hover:scale-110"
+                            style={{
+                              backgroundColor: color,
+                              borderColor: avatarColor === color ? "white" : "transparent",
+                              boxShadow: avatarColor === color ? `0 0 0 2px ${color}` : "none",
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -236,11 +296,9 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* Catch-all for not fully implemented tabs */}
-        {["Security", "History"].includes(
-          activeTab
-        ) && (
-          <div className="animate-fade-in py-12">
+        {/* System status tab */}
+        {activeTab === "System" && (
+          <div className="animate-fade-in">
             <h2
               className="text-[20px] font-bold mb-2"
               style={{
@@ -248,19 +306,30 @@ export default function SettingsPage() {
                 color: "var(--text-primary)",
               }}
             >
-              {activeTab}
+              System Status
             </h2>
             <p className="text-[14px] text-text-muted mb-8">
-              Manage your {activeTab.toLowerCase()} settings
+              Check backend connectivity
             </p>
             
-            <div className="p-8 glass-card rounded-2xl shadow-sm flex flex-col items-center justify-center text-center py-20 opacity-80">
-              <h3 className="text-[16px] font-bold text-text-primary mb-2">
-                Backend Configuration Required
-              </h3>
-              <p className="text-[13px] text-text-muted">
-                The {activeTab} settings require active backend hooks to configure.
-              </p>
+            <div className="glass-card rounded-2xl shadow-sm p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className={`w-3 h-3 rounded-full ${backendStatus === "online" ? "bg-accent-mint animate-pulse" : backendStatus === "offline" ? "bg-severity-critical" : "bg-severity-medium animate-pulse"}`} />
+                <span className="text-[14px] font-medium text-text-primary">
+                  Backend: {backendStatus === "online" ? "Connected" : backendStatus === "offline" ? "Disconnected" : "Checking..."}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setBackendStatus("checking");
+                  healthCheck()
+                    .then(() => { setBackendStatus("online"); addToast("Backend is online", "success"); })
+                    .catch(() => { setBackendStatus("offline"); addToast("Cannot reach backend", "error"); });
+                }}
+                className="px-4 py-2 rounded-lg text-[13px] font-medium border border-border glass-panel hover:bg-white/40 transition-colors"
+              >
+                Test Connection
+              </button>
             </div>
           </div>
         )}
@@ -269,13 +338,10 @@ export default function SettingsPage() {
       <ConfirmModal
         isOpen={isDangerModalOpen}
         title="Are you sure?"
-        description="This action cannot be undone and will permanently alter your organization's data."
-        confirmLabel="Yes, Proceed"
+        description="This action cannot be undone and will permanently delete all your documents and their data."
+        confirmLabel={isDeleting ? "Deleting..." : "Yes, Delete All"}
         confirmVariant="danger"
-        onConfirm={() => {
-          setIsDangerModalOpen(false);
-          /* Call specific endpoint based on dangerActionType */
-        }}
+        onConfirm={handleDangerAction}
         onCancel={() => setIsDangerModalOpen(false)}
       />
     </div>

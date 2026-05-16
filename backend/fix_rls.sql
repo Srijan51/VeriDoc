@@ -1,58 +1,21 @@
 -- =============================================================================
--- VeriDoc Supabase Schema
--- Run this ENTIRE script in the Supabase SQL Editor (Dashboard > SQL Editor)
+-- VeriDoc RLS Fix — Run this in Supabase SQL Editor
+-- This ONLY adds the RLS policies without touching existing tables
 -- =============================================================================
 
--- 1. Enable the pgvector extension (needed for embeddings)
-CREATE EXTENSION IF NOT EXISTS vector;
-
--- 2. Create the documents metadata table
-CREATE TABLE IF NOT EXISTS documents (
-    doc_id      TEXT PRIMARY KEY,
-    filename    TEXT NOT NULL,
-    doc_type    TEXT NOT NULL,
-    doc_date    DATE NOT NULL,
-    file_type   TEXT NOT NULL,
-    chunk_count INTEGER NOT NULL DEFAULT 0,
-    size_bytes  INTEGER,
-    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 3. Create the document_chunks table for vector embeddings
--- Drop existing if dimension changed
-DROP INDEX IF EXISTS idx_document_chunks_embedding;
-DROP TABLE IF EXISTS document_chunks;
-
-CREATE TABLE document_chunks (
-    id          BIGSERIAL PRIMARY KEY,
-    doc_id      TEXT REFERENCES documents(doc_id) ON DELETE CASCADE,
-    filename    TEXT NOT NULL,
-    chunk_index INTEGER NOT NULL,
-    text        TEXT NOT NULL,
-    embedding   vector(768)
-);
-
--- 4. Create the HNSW index for fast similarity search
-CREATE INDEX idx_document_chunks_embedding
-    ON document_chunks USING hnsw (embedding vector_cosine_ops);
-
--- 5. Row Level Security policies
---    Allow the anon key full CRUD access (no auth required for this app)
-
--- Documents table
+-- Documents table: allow full CRUD for anon key
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow all on documents" ON documents;
 CREATE POLICY "Allow all on documents" ON documents
     FOR ALL USING (true) WITH CHECK (true);
 
--- Document chunks table
+-- Document chunks table: allow full CRUD for anon key
 ALTER TABLE document_chunks ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow all on document_chunks" ON document_chunks;
 CREATE POLICY "Allow all on document_chunks" ON document_chunks
     FOR ALL USING (true) WITH CHECK (true);
 
--- 6. Create the similarity search RPC function
---    This JOINs with documents table to return doc_type and doc_date
+-- Update RPC to use SECURITY DEFINER so it bypasses RLS
 CREATE OR REPLACE FUNCTION match_document_chunks(
     query_embedding vector(768),
     match_threshold float,

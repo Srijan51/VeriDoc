@@ -56,7 +56,7 @@ class QueryResponse(BaseModel):
     contradictions: list[Contradiction]
     no_answer_found: bool
     no_answer_reason: Optional[str] = None
-    model: str = "models/gemini-2.5-flash"
+    model: str = "groq-mini-1"
 
 
 # ── Documents ─────────────────────────────────────────────────────────────────

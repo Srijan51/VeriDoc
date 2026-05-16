@@ -16,8 +16,8 @@ from app.services.storage import _get_client
 
 logger = logging.getLogger(__name__)
 
-# ── Embedding dimension for text-embedding-004 ────────────────────────────────
-EMBEDDING_DIM = 3072
+# ── Embedding config ──────────────────────────────────────────────────────────
+EMBEDDING_DIM = 768
 EMBED_MODEL = "models/gemini-embedding-001"
 BATCH_SIZE = 50
 
@@ -50,7 +50,10 @@ def _embed_texts(texts: list[str]) -> list[list[float]]:
         result = client.models.embed_content(
             model=EMBED_MODEL,
             contents=text,
-            config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT"),
+            config=types.EmbedContentConfig(
+                task_type="RETRIEVAL_DOCUMENT",
+                output_dimensionality=EMBEDDING_DIM,
+            ),
         )
         embeddings.append(result.embeddings[0].values)
 
@@ -63,7 +66,10 @@ def _embed_query(text: str) -> list[float]:
     result = client.models.embed_content(
         model=EMBED_MODEL,
         contents=text,
-        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=EMBEDDING_DIM,
+        ),
     )
     return result.embeddings[0].values
 

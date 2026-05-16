@@ -17,11 +17,11 @@ from app.services.embeddings import upsert_chunks
 from app.services.storage import store_in_supabase
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/upload", tags=["upload"])
+router = APIRouter(tags=["upload"])
 
 
 @router.post(
-    "",
+    "/upload",
     response_model=UploadResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload a document for indexing",
@@ -40,13 +40,22 @@ async def upload_document(
     - Saves metadata to Supabase.
     - Returns a doc_id for subsequent queries.
     """
-    # Validate doc_type
-    allowed_doc_types = {"policy", "handbook", "sop", "memo"}
-    if doc_type not in allowed_doc_types:
+    # Normalize doc_type to Title Case so it matches backend conventions
+    # Frontend sends lowercase: "policy", "handbook", "sop", "memo"
+    # Backend stores as Title Case: "Policy", "Handbook", "SOP", "Memo"
+    doc_type_map = {
+        "policy": "Policy",
+        "handbook": "Handbook",
+        "sop": "SOP",
+        "memo": "Memo",
+    }
+    normalized = doc_type_map.get(doc_type.strip().lower())
+    if normalized is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"doc_type must be one of: {', '.join(sorted(allowed_doc_types))}",
+            detail=f"doc_type must be one of: {', '.join(sorted(doc_type_map.keys()))} (case-insensitive)",
         )
+    doc_type = normalized
 
     # Validate doc_date
     try:

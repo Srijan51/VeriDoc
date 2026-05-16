@@ -4,10 +4,15 @@ Uvicorn entry point — run with:
 or directly:
     uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 """
-from dotenv import load_dotenv
 import os
-load_dotenv()
-print("GEMINI KEY:", os.getenv("GEMINI_API_KEY", "NOT FOUND")[:12])
+import sys
+
+# Ensure backend directory is the working context for .env loading
+backend_dir = os.path.dirname(os.path.abspath(__file__))
+os.chdir(backend_dir)
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(backend_dir, ".env"))
 
 import uvicorn
 

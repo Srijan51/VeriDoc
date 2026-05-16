@@ -1,18 +1,20 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from functools import lru_cache
 import os
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
-    # Gemini
+    # Groq (LLM provider)
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+
+    # Gemini (Embeddings)
     gemini_api_key: str = ""
-    gemini_model: str = "models/gemini-2.5-flash"
 
     # Supabase
     supabase_url: str = ""
@@ -27,6 +29,11 @@ class Settings(BaseSettings):
         return [o.strip() for o in self.allowed_origins.split(",") if o.strip()]
 
 
-@lru_cache()
+# Cached singleton — re-created when module reloads (uvicorn --reload)
+_settings: Settings | None = None
+
 def get_settings() -> Settings:
-    return Settings()
+    global _settings
+    if _settings is None:
+        _settings = Settings()
+    return _settings

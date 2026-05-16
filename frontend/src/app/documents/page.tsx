@@ -8,7 +8,8 @@ import DocTypeIcon from "@/components/ui/DocTypeIcon";
 import AuthorityBar from "@/components/ui/AuthorityBar";
 import SeverityBadge from "@/components/ui/SeverityBadge";
 import FileDetailsModal from "@/components/ui/FileDetailsModal";
-import { fetchDocuments, uploadDocument } from "@/lib/api";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import { fetchDocuments, uploadDocument, deleteDocument } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
 
 // Represents the expected backend document model
@@ -34,10 +35,14 @@ export default function DocumentsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addToast } = useToast();
+  const hasLoadedRef = useRef(false);
 
-  const loadDocuments = useCallback(async () => {
+  const loadDocuments = useCallback(async (showToast = false) => {
     try {
       setIsLoading(true);
       const response = await fetchDocuments();
@@ -52,7 +57,9 @@ export default function DocumentsPage() {
         status: "Active" as const,
       }));
       setDocuments(mapped);
-      addToast(`✅ Loaded ${mapped.length} document(s)`, "success");
+      if (showToast) {
+        addToast(`Loaded ${mapped.length} document(s)`, "success");
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to fetch documents";
       addToast(errorMessage, "error");
@@ -60,10 +67,14 @@ export default function DocumentsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [addToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
-    loadDocuments();
+    if (!hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadDocuments(false);
+    }
   }, [loadDocuments]);
 
   // Filter and search logic
@@ -122,10 +133,10 @@ export default function DocumentsPage() {
     try {
       setIsUploading(true);
       await uploadDocument(fileToUpload, details.type, details.date);
-      addToast(`✅ ${fileToUpload.name} uploaded successfully`, "success");
+      addToast(`${fileToUpload.name} uploaded successfully`, "success");
 
       // Refresh documents list
-      await loadDocuments();
+      await loadDocuments(false);
 
       // Clean up
       setSelectedFile(null);
@@ -142,6 +153,22 @@ export default function DocumentsPage() {
     }
   };
 
+  const handleDeleteDoc = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteDocument(deleteTarget.id);
+      addToast(`Deleted "${deleteTarget.name}"`, "success");
+      await loadDocuments(false);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Failed to delete";
+      addToast(msg, "error");
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto py-8 px-8 animate-fade-in">
       <PageHeader
@@ -154,7 +181,7 @@ export default function DocumentsPage() {
         actions={
           <div className="flex gap-2">
             <button
-              onClick={loadDocuments}
+              onClick={() => loadDocuments(true)}
               disabled={isLoading}
               className="flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold border border-white/60 glass-panel text-text-primary hover:bg-white/40 transition-all disabled:opacity-50"
             >
@@ -198,15 +225,48 @@ export default function DocumentsPage() {
       {/* Upload Zone */}
       {isUploadOpen && (
         <div
-          className="mb-8 p-8 border-[1.5px] border-dashed rounded-xl transition-all"
+          id="upload-drop-zone"
+          className={`mb-8 p-8 border-[1.5px] border-dashed rounded-xl transition-all cursor-pointer ${
+            isDragOver ? "border-solid bg-accent-mint/5 scale-[1.01]" : ""
+          }`}
           style={{
             borderColor: "var(--accent-mint)",
-            backgroundColor: "rgba(0,201,167,0.02)",
+            backgroundColor: isDragOver ? "rgba(0,201,167,0.05)" : "rgba(0,201,167,0.02)",
+          }}
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragOver(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragOver(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file) {
+              if (file.size > 10 * 1024 * 1024) {
+                addToast("File size exceeds 10MB limit", "error");
+                return;
+              }
+              const ext = file.name.split('.').pop()?.toLowerCase();
+              if (!['pdf', 'docx', 'txt'].includes(ext || '')) {
+                addToast("Unsupported file type. Use PDF, DOCX, or TXT.", "error");
+                return;
+              }
+              setSelectedFile(file);
+              setIsFileDetailsOpen(true);
+            }
           }}
         >
-          <div className="flex flex-col items-center justify-center text-center">
+          <div className="flex flex-col items-center justify-center text-center pointer-events-none">
             <svg
-              className="mb-4"
+              className={`mb-4 transition-transform ${isDragOver ? "scale-125" : ""}`}
               width="40"
               height="40"
               viewBox="0 0 24 24"
@@ -222,18 +282,21 @@ export default function DocumentsPage() {
               className="text-[15px] font-bold mb-1"
               style={{ color: "var(--text-primary)" }}
             >
-              Drop files here or click to browse
+              {isDragOver ? "Drop file here" : "Drop files here or click to browse"}
             </h3>
             <p
               className="text-[11px] mb-4"
               style={{ color: "var(--text-muted)" }}
             >
-              Supports PDF, DOCX, TXT, XLSX · Max 10MB per file
+              Supports PDF, DOCX, TXT · Max 10MB per file
             </p>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
               disabled={isUploading}
-              className="px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="pointer-events-auto px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 hover:border-accent-mint/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? "Uploading..." : "Select Files"}
             </button>
@@ -243,7 +306,7 @@ export default function DocumentsPage() {
               onChange={handleFileSelect}
               disabled={isUploading}
               className="hidden"
-              accept=".pdf,.docx,.txt,.xlsx"
+              accept=".pdf,.docx,.txt"
             />
           </div>
         </div>
@@ -252,7 +315,7 @@ export default function DocumentsPage() {
       {/* Filter + Search Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex flex-wrap items-center gap-2">
-          {["All", "PDF", "DOCX", "TXT", "XLSX"].map((filter) => (
+          {["All", "PDF", "DOCX", "TXT"].map((filter) => (
             <button
               key={filter}
               onClick={() => setActiveFilter(filter)}
@@ -332,6 +395,20 @@ export default function DocumentsPage() {
             />
           ) : (
             <EmptyState
+              icon={
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              }
               title="No matching documents"
               description="Try adjusting your filters or search query."
             />
@@ -360,6 +437,9 @@ export default function DocumentsPage() {
                 </th>
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
                   Status
+                </th>
+                <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted text-right">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -408,6 +488,14 @@ export default function DocumentsPage() {
                       {doc.status}
                     </span>
                   </td>
+                  <td className="py-3 px-4 text-right">
+                    <button
+                      onClick={() => setDeleteTarget({ id: doc.id, name: doc.name })}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-severity-critical border border-severity-critical/30 hover:bg-severity-critical hover:text-white transition-all"
+                    >
+                      Delete
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -424,62 +512,18 @@ export default function DocumentsPage() {
         onSave={handleUpload}
         selectedFile={selectedFile || undefined}
       />
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title={`Delete "${deleteTarget?.name}"?`}
+        description="This will permanently remove this document and all its indexed data. This action cannot be undone."
+        confirmLabel={isDeleting ? "Deleting..." : "Delete"}
+        confirmVariant="danger"
+        onConfirm={handleDeleteDoc}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
-
-      {/* Upload Zone */}
-      {isUploadOpen && (
-        <div
-          className="mb-8 p-8 border-[1.5px] border-dashed rounded-xl transition-all"
-          style={{
-            borderColor: "var(--accent-mint)",
-            backgroundColor: "rgba(0,201,167,0.02)",
-          }}
-        >
-          <div className="flex flex-col items-center justify-center text-center">
-            <svg
-              className="mb-4"
-              width="40"
-              height="40"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="var(--accent-mint)"
-              strokeWidth="1.5"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <h3
-              className="text-[15px] font-bold mb-1"
-              style={{ color: "var(--text-primary)" }}
-            >
-              Drop files here or click to browse
-            </h3>
-            <p
-              className="text-[11px] mb-4"
-              style={{ color: "var(--text-muted)" }}
-            >
-              Supports PDF, DOCX, TXT, XLSX · Max 10MB per file
-            </p>
-            <button 
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className="px-5 py-2 rounded-lg text-sm font-medium border border-border glass-panel hover:bg-white/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isUploading ? "Uploading..." : "Select Files"}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileSelect}
-              disabled={isUploading}
-              className="hidden"
-              accept=".pdf,.docx,.txt,.xlsx"
-            />
-          </div>
-        </div>
-      )}
 
 

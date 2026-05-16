@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useToast } from "@/lib/hooks/useToast";
 
 interface NavItem {
   id: string;
@@ -75,6 +76,7 @@ const navItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { addToast } = useToast();
 
   return (
     <aside
@@ -189,7 +191,8 @@ export default function Sidebar() {
       <div className="px-3 pb-5 pt-4">
         <button
           id="sidebar-sign-in"
-          className="w-full flex items-center justify-center gap-2 px-4 h-[36px] rounded-xl transition-all hover:opacity-85"
+          onClick={() => addToast("Authentication coming soon!", "info")}
+          className="w-full flex items-center justify-center gap-2 px-4 h-[36px] rounded-xl transition-all hover:opacity-85 hover:shadow-md"
           style={{
             background: "var(--text-primary)",
             color: "white",
@@ -203,13 +206,13 @@ export default function Sidebar() {
           </svg>
         </button>
         <div className="mt-3 text-center">
-          <Link
-            href="/register"
+          <button
+            onClick={() => addToast("Registration coming soon!", "info")}
             className="text-[11px] font-medium hover:underline transition-colors"
             style={{ color: "var(--accent-mint)" }}
           >
             New here? Create account
-          </Link>
+          </button>
         </div>
       </div>
     </aside>

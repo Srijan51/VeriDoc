@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.models.schemas import QueryRequest, QueryResponse, Citation, Contradiction
 from app.services.embeddings import similarity_search
-from app.services.gemini import generate_answer, GENERATION_MODEL
+from app.services.groq import generate_answer, GENERATION_MODEL
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/query", tags=["query"])

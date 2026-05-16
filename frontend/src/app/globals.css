@@ -128,6 +128,126 @@ h1, h2, h3, h4, h5, h6 {
 
 button, .btn {
   font-family: var(--font-button), sans-serif !important;
+  cursor: pointer;
+}
+
+/* --- Interactive Button States --- */
+button:not(:disabled) {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0px) scale(0.98);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Primary CTA buttons (mint gradient) */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-mint), var(--accent-teal));
+  color: white;
+  border: none;
+  box-shadow: 0 4px 14px rgba(0, 201, 167, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary:not(:disabled):hover {
+  box-shadow: 0 6px 20px rgba(0, 201, 167, 0.4);
+  filter: brightness(1.05);
+  transform: translateY(-2px);
+}
+
+.btn-primary:not(:disabled):active {
+  box-shadow: 0 2px 8px rgba(0, 201, 167, 0.3);
+  transform: translateY(0) scale(0.98);
+}
+
+/* Ghost/outline buttons */
+.btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-ghost:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(0, 201, 167, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+/* Danger buttons */
+.btn-danger {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-danger:not(:disabled):hover {
+  background: var(--severity-critical) !important;
+  color: white !important;
+  box-shadow: 0 4px 14px rgba(255, 59, 59, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Focus rings for accessibility */
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: 2px solid var(--accent-mint);
+  outline-offset: 2px;
+}
+
+/* --- Interactive Nav Items --- */
+#sidebar a {
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#sidebar a:hover:not(.active) {
+  transform: translateX(2px);
+}
+
+/* --- Interactive Table Rows --- */
+table tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+/* --- Enhanced Glass Cards on hover --- */
+.glass-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.glass-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* --- Tooltip helper --- */
+.tooltip-trigger {
+  position: relative;
+}
+
+.tooltip-trigger::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.9);
+  background: var(--text-primary);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.tooltip-trigger:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
 /* --- Keyframe Animations --- */

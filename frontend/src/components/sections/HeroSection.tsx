@@ -63,9 +63,8 @@ export default function HeroSection() {
           <Link
             id="hero-upload"
             href="/documents"
-            className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white transition-all hover:opacity-90"
+            className="btn-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white"
             style={{
-              background: "linear-gradient(135deg, var(--accent-mint), var(--accent-teal))",
               fontFamily: "var(--font-body), system-ui, sans-serif",
             }}
           >
@@ -78,7 +77,7 @@ export default function HeroSection() {
           </Link>
           <Link
             href="/ai-assistant"
-            className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold border border-white/60 glass-panel text-text-primary hover:bg-white/40 transition-all"
+            className="btn-ghost flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold glass-panel text-text-primary"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -89,7 +88,7 @@ export default function HeroSection() {
 
         {/* Document Count + Status */}
         <div className="animate-slide-up delay-600" style={{ opacity: 0, animationFillMode: "forwards" }}>
-          <div className="flex items-center justify-center gap-2 mb-6">
+          <div className="flex items-center justify-center gap-2 mb-8">
             <div className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/60">
               <div className="w-2 h-2 rounded-full bg-accent-mint animate-pulse"></div>
               <span className="text-[13px] font-medium text-text-primary">
@@ -101,46 +100,23 @@ export default function HeroSection() {
             </div>
           </div>
 
-          {/* Trust Badges */}
-          <p
-            className="label-caps text-[10px] mb-4 text-center"
-            style={{ color: "var(--text-muted)", letterSpacing: "0.15em" }}
-          >
-            TRUSTED BY INNOVATIVE ENTERPRISES WORLDWIDE
-          </p>
-          <div className="flex items-center justify-center gap-6 flex-wrap">
-            {["Globex Corporation", "NEXORA", "PIVOTLABS", "synergen", "vertex"].map(
-              (company) => (
-                <span
-                  key={company}
-                  className="text-[13px] font-semibold"
-                  style={{
-                    color: "var(--text-muted)",
-                    fontFamily: "var(--font-heading), system-ui, sans-serif",
-                    opacity: 0.6,
-                  }}
-                >
-                  {company === "Globex Corporation" && (
-                    <span className="flex items-center gap-1.5 justify-center">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
-                      </svg>
-                      {company}
-                    </span>
-                  )}
-                  {company === "NEXORA" && (
-                    <span className="flex items-center gap-1.5 justify-center">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <circle cx="12" cy="12" r="10" />
-                      </svg>
-                      {company}
-                    </span>
-                  )}
-                  {company !== "Globex Corporation" && company !== "NEXORA" && company}
-                </span>
-              )
-            )}
+          {/* Feature Highlights */}
+          <div className="flex items-center justify-center gap-4 flex-wrap max-w-2xl mx-auto">
+            {[
+              { icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", label: "AI Contradiction Detection" },
+              { icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253", label: "Document Analysis" },
+              { icon: "M13 10V3L4 14h7v7l9-11h-7z", label: "Instant Results" },
+            ].map((feature) => (
+              <div
+                key={feature.label}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass border border-white/40 hover:border-accent-mint/30 transition-all hover:shadow-sm"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d={feature.icon} />
+                </svg>
+                <span className="text-[12px] font-medium text-text-secondary">{feature.label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
