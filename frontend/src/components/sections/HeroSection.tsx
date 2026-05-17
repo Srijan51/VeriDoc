@@ -23,102 +23,116 @@ export default function HeroSection() {
   }, []);
 
   return (
-    <section id="hero-section" className="relative">
-      {/* Single-column centered layout */}
-      <div className="flex flex-col items-center justify-center text-center w-full max-w-4xl mx-auto">
-        {/* Headline */}
-        <h1
-          className="text-[44px] leading-[1.15] font-extrabold mb-5 animate-slide-up delay-200"
-          style={{
-            fontFamily: "var(--font-display), serif",
-            color: "var(--text-primary)",
-            opacity: 0,
-            animationFillMode: "forwards",
-          }}
-        >
-          Your Company&apos;s Documents Shouldn&apos;t Contradict Each Other.
-        </h1>
-
-        {/* Subtext */}
-        <p
-          className="text-[16px] leading-relaxed mb-7 max-w-lg mx-auto animate-slide-up delay-300"
-          style={{
-            color: "var(--text-secondary)",
-            fontFamily: "var(--font-body), system-ui, sans-serif",
-            opacity: 0,
-            animationFillMode: "forwards",
-          }}
-        >
-          VERIDOC detects conflicts, outdated policies, and inconsistencies
-          across enterprise knowledge systems using AI.
-        </p>
-
-        {/* Search Bar */}
-        <div className="mb-6 animate-slide-up delay-400 w-full flex justify-center" style={{ opacity: 0, animationFillMode: "forwards" }}>
-          <SearchBar />
-        </div>
-
-        {/* CTA Buttons */}
-        <div className="flex justify-center items-center gap-3 mb-10 animate-slide-up delay-500" style={{ opacity: 0, animationFillMode: "forwards" }}>
-          <Link
-            id="hero-upload"
-            href="/documents"
-            className="btn-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white"
+    <section id="hero-section" className="relative w-full max-w-7xl mx-auto px-6 lg:px-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center min-h-[70vh]">
+        
+        {/* Left Column - Content */}
+        <div className="flex flex-col items-start text-left w-full">
+          {/* Headline */}
+          <h1
+            className="text-[44px] lg:text-[52px] leading-[1.1] font-extrabold mb-6 animate-slide-up delay-200"
             style={{
-              fontFamily: "var(--font-body), system-ui, sans-serif",
+              fontFamily: "var(--font-display), serif",
+              color: "var(--text-primary)",
+              opacity: 0,
+              animationFillMode: "forwards",
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="16 16 12 12 8 16" />
-              <line x1="12" y1="12" x2="12" y2="21" />
-              <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
-            </svg>
-            Upload Documents
-          </Link>
-          <Link
-            href="/ai-assistant"
-            className="btn-ghost flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold glass-panel text-text-primary"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            Ask AI Assistant
-          </Link>
-        </div>
+            Your Company&apos;s Documents Shouldn&apos;t Contradict Each Other.
+          </h1>
 
-        {/* Document Count + Status */}
-        <div className="animate-slide-up delay-600" style={{ opacity: 0, animationFillMode: "forwards" }}>
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full glass border border-white/60">
-              <div className="w-2 h-2 rounded-full bg-accent-mint animate-pulse"></div>
-              <span className="text-[13px] font-medium text-text-primary">
-                {documentCount > 0 
-                  ? `${documentCount} document${documentCount !== 1 ? "s" : ""} indexed`
-                  : "Ready to get started"
-                }
-              </span>
+          {/* Subtext */}
+          <p
+            className="text-[17px] lg:text-[18px] leading-relaxed mb-8 max-w-xl animate-slide-up delay-300"
+            style={{
+              color: "var(--text-secondary)",
+              fontFamily: "var(--font-body), system-ui, sans-serif",
+              opacity: 0,
+              animationFillMode: "forwards",
+            }}
+          >
+            VERIDOC detects conflicts, outdated policies, and inconsistencies
+            across enterprise knowledge systems using AI.
+          </p>
+
+          {/* Search Bar */}
+          <div className="mb-8 w-full max-w-xl animate-slide-up delay-400" style={{ opacity: 0, animationFillMode: "forwards" }}>
+            <SearchBar />
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex items-center gap-3 mb-12 animate-slide-up delay-500" style={{ opacity: 0, animationFillMode: "forwards" }}>
+            <Link
+              id="hero-upload"
+              href="/documents"
+              className="btn-primary flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white"
+              style={{
+                fontFamily: "var(--font-body), system-ui, sans-serif",
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="16 16 12 12 8 16" />
+                <line x1="12" y1="12" x2="12" y2="21" />
+                <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3" />
+              </svg>
+              Upload Documents
+            </Link>
+            <Link
+              href="/ai-assistant"
+              className="btn-ghost flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold glass-panel text-text-primary"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              Ask AI Assistant
+            </Link>
+          </div>
+
+          {/* System Overview Stats */}
+          <div className="animate-slide-up delay-600 w-full max-w-lg border-t border-white/30 pt-8" style={{ opacity: 0, animationFillMode: "forwards" }}>
+            <p className="text-[11px] font-bold text-text-muted uppercase tracking-widest mb-4">System Overview</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="glass-panel p-4 rounded-xl border border-white/40 hover:border-accent-mint/30 transition-colors">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-accent-mint animate-pulse"></div>
+                  <span className="text-[12px] font-semibold text-text-primary">Documents</span>
+                </div>
+                <p className="text-[24px] font-bold text-accent-mint leading-none mt-2">{documentCount}</p>
+                <p className="text-[10px] text-text-muted mt-1">Total Indexed</p>
+              </div>
+              
+              <div className="glass-panel p-4 rounded-xl border border-white/40 hover:border-accent-mint/30 transition-colors">
+                <div className="flex items-center gap-2 mb-1">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--accent-teal)" strokeWidth="2">
+                    <path d="M12 2a4 4 0 014 4v2a4 4 0 01-8 0V6a4 4 0 014-4z" />
+                    <path d="M6 10v1a6 6 0 0012 0v-1" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                  </svg>
+                  <span className="text-[12px] font-semibold text-text-primary">AI Engine</span>
+                </div>
+                <p className="text-[14px] font-bold text-accent-teal leading-none mt-3">Online</p>
+                <p className="text-[10px] text-text-muted mt-1">Ready for queries</p>
+              </div>
             </div>
           </div>
-
-          {/* Feature Highlights */}
-          <div className="flex items-center justify-center gap-4 flex-wrap max-w-2xl mx-auto">
-            {[
-              { icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z", label: "AI Contradiction Detection" },
-              { icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253", label: "Document Analysis" },
-              { icon: "M13 10V3L4 14h7v7l9-11h-7z", label: "Instant Results" },
-            ].map((feature) => (
-              <div
-                key={feature.label}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl glass border border-white/40 hover:border-accent-mint/30 transition-all hover:shadow-sm"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d={feature.icon} />
-                </svg>
-                <span className="text-[12px] font-medium text-text-secondary">{feature.label}</span>
-              </div>
-            ))}
-          </div>
         </div>
+
+        {/* Right Column - Holographic Watermark */}
+        <div className="hidden lg:flex justify-center items-center relative w-full h-full animate-fade-in delay-500" style={{ opacity: 0, animationFillMode: "forwards" }}>
+          {/* Subtle background glow for the image */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-accent-mint/5 rounded-full blur-3xl opacity-50 mix-blend-screen pointer-events-none"></div>
+          
+          <img 
+            src="/hero-bg.png" 
+            alt="VeriDoc Holographic Engine" 
+            className="w-full max-w-[550px] object-contain opacity-[0.55] mix-blend-multiply animate-float select-none pointer-events-none"
+            style={{ 
+              filter: "brightness(1.1) contrast(1.1) drop-shadow(0 0 30px rgba(0, 201, 167, 0.15))" 
+            }}
+          />
+        </div>
+        
       </div>
     </section>
   );

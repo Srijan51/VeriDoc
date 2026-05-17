@@ -37,6 +37,11 @@ export default function LoginPage() {
   return (
     <div className="auth-page">
       <div className="auth-card animate-scale-in">
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <img src="/logo.png" alt="VeriDoc Logo" className="w-20 h-20 rounded-2xl shadow-xl border border-[var(--border)]" />
+        </div>
+
         {/* Header Badge */}
         <div className="auth-header-badge">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

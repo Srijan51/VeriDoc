@@ -26,7 +26,7 @@ export default function SearchBar() {
   };
 
   return (
-    <form onSubmit={handleSearch} className="relative group w-full max-w-md">
+    <form onSubmit={handleSearch} className="relative group w-full max-w-full">
       <div
         className="flex items-center gap-3 px-5 py-3.5 rounded-full transition-all duration-200 hover:shadow-lg"
         style={{

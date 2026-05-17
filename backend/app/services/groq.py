@@ -94,7 +94,8 @@ RULES:
 - Always give a definitive answer that RESOLVES the conflict
 - The answer must clearly state: what the correct information is, which document it comes from, and why
 - If no relevant information exists, set no_answer_found to true
-- Never hallucinate facts not present in the retrieved chunks"""
+- Never hallucinate facts not present in the retrieved chunks
+- CRITICAL: You MUST adhere STRICTLY to the following document hierarchy to resolve conflicts: 1. Policy 2. Handbook 3. SOP 4. Memo. Within the same type, the NEWEST document (by DATE) ALWAYS wins. Any contradiction resolution that violates this hierarchy or ignores the date is incorrect."""
 
 
 def _call_groq_api(system_prompt: str, user_prompt: str, model: str, api_key: str, timeout: int = 60) -> str:

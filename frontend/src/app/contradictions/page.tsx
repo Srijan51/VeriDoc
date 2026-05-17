@@ -76,6 +76,20 @@ export default function ContradictionsPage() {
         console.warn("Failed to parse transferred contradictions");
       }
       sessionStorage.removeItem("veridoc_detected_contradictions");
+    } else {
+      const scanned = sessionStorage.getItem("veridoc_scanned_contradictions");
+      if (scanned) {
+        try {
+          const cards: ContradictionCard[] = JSON.parse(scanned);
+          if (cards.length > 0) {
+            setContradictions(cards);
+            setHasScanned(true);
+            setScanSource("manual");
+          }
+        } catch {
+          console.warn("Failed to parse scanned contradictions");
+        }
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,6 +139,9 @@ export default function ContradictionsPage() {
       }
 
       setContradictions(collected);
+      try {
+        sessionStorage.setItem("veridoc_scanned_contradictions", JSON.stringify(collected));
+      } catch {}
       addToast(
         collected.length === 0 ? "✅ No contradictions detected!" : `Found ${collected.length} contradiction(s)`,
         collected.length === 0 ? "success" : "warning"

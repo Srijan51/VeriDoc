@@ -83,7 +83,7 @@ def get_all_documents(user_id: str | None = None) -> list[dict]:
     """
     client = _get_client()
     query = client.table("documents").select(
-        "doc_id, filename, file_type, chunk_count, uploaded_at, size_bytes"
+        "doc_id, filename, file_type, doc_type, doc_date, chunk_count, uploaded_at, size_bytes"
     )
     if user_id:
         query = query.eq("user_id", user_id)

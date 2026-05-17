@@ -17,6 +17,8 @@ interface Document {
   id: string;
   name: string;
   type: string;
+  category: string;
+  docDate: string;
   department: string;
   uploadedAt: string;
   authorityScore: number;
@@ -44,17 +46,41 @@ export default function DocumentsPage() {
 
   const DOCS_CACHE_KEY = "veridoc_docs_cache";
 
-  const mapDocuments = (docs: { doc_id: string; filename: string; file_type: string; uploaded_at: string }[]) =>
-    docs.map((doc) => ({
-      id: doc.doc_id,
-      name: doc.filename,
-      type: doc.file_type,
-      department: "",
-      uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
-      authorityScore: 80,
-      conflicts: 0,
-      status: "Active" as const,
-    }));
+  const mapDocuments = (docs: any[]) => {
+    let scannedCards: any[] = [];
+    try {
+      const scanned = sessionStorage.getItem("veridoc_scanned_contradictions");
+      if (scanned) {
+        scannedCards = JSON.parse(scanned);
+      }
+    } catch {}
+
+    return docs.map((doc) => {
+      const docConflicts = scannedCards.filter(
+        (card) => card.sourceA === doc.filename || card.sourceB === doc.filename
+      ).length;
+
+      const cat = doc.doc_type || "Unknown";
+      let authScore = 50;
+      if (cat === "Policy") authScore = 100;
+      else if (cat === "Handbook") authScore = 80;
+      else if (cat === "SOP") authScore = 60;
+      else if (cat === "Memo") authScore = 40;
+
+      return {
+        id: doc.doc_id,
+        name: doc.filename,
+        type: doc.file_type,
+        category: cat,
+        docDate: doc.doc_date || "Unknown",
+        department: "",
+        uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
+        authorityScore: authScore,
+        conflicts: docConflicts,
+        status: "Active" as const,
+      };
+    });
+  };
 
   const loadDocuments = useCallback(async (showToast = false) => {
     try {
@@ -355,6 +381,27 @@ export default function DocumentsPage() {
         </div>
       )}
 
+      {/* Hierarchy Info Banner */}
+      <div className="mb-6 p-4 rounded-xl bg-accent-mint/10 border border-accent-mint/30 flex items-start gap-3 text-text-primary text-[13px] shadow-sm">
+        <svg className="w-5 h-5 text-accent-teal mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+        <div>
+          <p className="font-bold mb-1" style={{ fontFamily: "var(--font-heading), serif" }}>System Hierarchy</p>
+          <p className="text-text-secondary leading-relaxed text-[12px]">
+            VERIDOC resolves conflicts using the following strict authority order: 
+            <span className="font-bold text-accent-teal ml-1">Policy</span> (100) &gt; 
+            <span className="font-bold text-accent-teal mx-1">Handbook</span> (80) &gt; 
+            <span className="font-bold text-accent-teal mx-1">SOP</span> (60) &gt; 
+            <span className="font-bold text-accent-teal mx-1">Memo</span> (40).
+            <br />
+            Newer documents automatically take precedence over older documents within the same category.
+          </p>
+        </div>
+      </div>
+
       {/* Filter + Search Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div className="flex flex-wrap items-center gap-2">
@@ -470,10 +517,10 @@ export default function DocumentsPage() {
                   Type
                 </th>
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
-                  Uploaded
+                  Category
                 </th>
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
-                  Authority
+                  Uploaded
                 </th>
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
                   Conflicts
@@ -513,11 +560,13 @@ export default function DocumentsPage() {
                       {doc.type}
                     </span>
                   </td>
+                  <td className="py-3 px-4">
+                    <span className="px-2 py-1 rounded-full text-[10px] font-bold" style={{ backgroundColor: "rgba(0, 201, 167, 0.1)", color: "var(--accent-mint)" }}>
+                      {doc.category}
+                    </span>
+                  </td>
                   <td className="py-3 px-4 text-[12px] text-text-muted">
                     {doc.uploadedAt}
-                  </td>
-                  <td className="py-3 px-4">
-                    <AuthorityBar score={doc.authorityScore} />
                   </td>
                   <td className="py-3 px-4">
                     {doc.conflicts === 0 ? (

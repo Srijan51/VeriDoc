@@ -45,6 +45,8 @@ async def list_documents(request: Request) -> DocumentListResponse:
             doc_id=row["doc_id"],
             filename=row["filename"],
             file_type=row["file_type"],
+            doc_type=row.get("doc_type"),
+            doc_date=row.get("doc_date"),
             chunk_count=row["chunk_count"],
             uploaded_at=datetime.fromisoformat(row["uploaded_at"]),
             size_bytes=row.get("size_bytes"),

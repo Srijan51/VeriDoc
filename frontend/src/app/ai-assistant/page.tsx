@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { fetchDocuments, queryDocuments, Citation, Contradiction, getDocumentViewUrl } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
@@ -29,13 +29,13 @@ function generateId() {
 
 function loadSessions(): ChatSession[] {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
 function saveSessions(sessions: ChatSession[]) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
 }
 
 export default function AiAssistantPage() {
@@ -59,12 +59,20 @@ export default function AiAssistantPage() {
     const loaded = loadSessions();
     setSessions(loaded);
 
-    const activeId = sessionStorage.getItem(ACTIVE_KEY);
+    const activeId = localStorage.getItem(ACTIVE_KEY);
     if (activeId) {
       const active = loaded.find(s => s.id === activeId);
       if (active) {
         setActiveSessionId(active.id);
         setMessages(active.messages);
+        
+        const lastAssistantMsg = active.messages.filter(m => m.role === "assistant").pop();
+        if (lastAssistantMsg) {
+          setCurrentResponse({
+            citations: lastAssistantMsg.citations || [],
+            contradictions: lastAssistantMsg.contradictions || [],
+          });
+        }
         return;
       }
     }
@@ -91,7 +99,7 @@ export default function AiAssistantPage() {
     const trimmed = existing.slice(0, 20);
     saveSessions(trimmed);
     setSessions(trimmed);
-    sessionStorage.setItem(ACTIVE_KEY, sessionId);
+    localStorage.setItem(ACTIVE_KEY, sessionId);
   }, []);
 
   useEffect(() => {
@@ -183,15 +191,26 @@ export default function AiAssistantPage() {
     setActiveSessionId(newId);
     setMessages([]);
     setCurrentResponse(null);
-    sessionStorage.setItem(ACTIVE_KEY, newId);
+    sessionStorage.removeItem("veridoc_detected_contradictions");
+    localStorage.setItem(ACTIVE_KEY, newId);
     hasAutoQueried.current = false;
   };
 
   const loadSession = (session: ChatSession) => {
     setActiveSessionId(session.id);
     setMessages(session.messages);
-    setCurrentResponse(null);
-    sessionStorage.setItem(ACTIVE_KEY, session.id);
+    
+    const lastAssistantMsg = session.messages.filter(m => m.role === "assistant").pop();
+    if (lastAssistantMsg) {
+      setCurrentResponse({
+        citations: lastAssistantMsg.citations || [],
+        contradictions: lastAssistantMsg.contradictions || [],
+      });
+    } else {
+      setCurrentResponse(null);
+    }
+    
+    localStorage.setItem(ACTIVE_KEY, session.id);
     setShowHistory(false);
   };
 
@@ -211,6 +230,21 @@ export default function AiAssistantPage() {
     "Which document is most authoritative?",
     "Are there any compliance conflicts?",
   ];
+
+  const displayCitations = useMemo(() => {
+    if (!currentResponse) return [];
+    const usedSources = new Map<string, any>();
+    currentResponse.citations?.forEach(c => usedSources.set(c.source, c));
+    currentResponse.contradictions?.forEach(c => {
+      if (!usedSources.has(c.source_a)) {
+        usedSources.set(c.source_a, { source: c.source_a, doc_type: "Conflict Source", doc_date: "", claim: c.claim_a });
+      }
+      if (!usedSources.has(c.source_b)) {
+        usedSources.set(c.source_b, { source: c.source_b, doc_type: "Conflict Source", doc_date: "", claim: c.claim_b });
+      }
+    });
+    return Array.from(usedSources.values());
+  }, [currentResponse]);
 
   return (
     <div className="h-[calc(100vh-2rem)] pt-4 pb-4 flex flex-col max-w-[1600px] mx-auto animate-fade-in">
@@ -332,9 +366,20 @@ export default function AiAssistantPage() {
                             </svg>
                           </button>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-3">
                           {msg.contradictions.map((contradiction, cidx) => (
-                            <p key={cidx} className="text-[11px] text-text-secondary"><strong>{contradiction.topic}</strong> — {contradiction.severity.toUpperCase()} — {contradiction.source_a} vs {contradiction.source_b}</p>
+                            <div key={cidx} className="p-3 rounded-lg bg-white/30 border border-white/50">
+                              <p className="text-[12px] text-text-primary mb-1">
+                                <strong>{contradiction.topic}</strong> <span className="text-[9px] uppercase ml-1 px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: "var(--severity-high)" }}>{contradiction.severity}</span>
+                              </p>
+                              <p className="text-[11px] text-text-secondary mb-2">
+                                Conflicting claims in <strong>{contradiction.source_a}</strong> vs <strong>{contradiction.source_b}</strong>
+                              </p>
+                              <div className="mt-2 pl-2 border-l-2 border-accent-mint bg-accent-mint/5 py-1 px-2 rounded-r-md">
+                                <p className="text-[11px] font-bold text-text-primary">Source Used: {contradiction.authoritative_source}</p>
+                                <p className="text-[10px] text-text-secondary mt-0.5">Reason: {contradiction.reason}</p>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -389,16 +434,36 @@ export default function AiAssistantPage() {
         <div className="w-[300px] bg-white/30 backdrop-blur-md flex flex-col border-l border-white/40">
           <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between glass">
             <h3 className="text-[13px] font-bold" style={{ fontFamily: "var(--font-heading), system-ui, sans-serif" }}>Sources Used</h3>
-            <span className="px-2 py-0.5 rounded-full bg-bg-primary text-[10px] font-bold border border-border text-text-muted">{currentResponse?.citations.length || 0}</span>
+            <span className="px-2 py-0.5 rounded-full bg-bg-primary text-[10px] font-bold border border-border text-text-muted">{displayCitations.length}</span>
           </div>
-          <div className="flex-1 p-5 overflow-y-auto">
-            {!currentResponse || currentResponse.citations.length === 0 ? (
+          <div className="flex-1 p-4 overflow-y-auto">
+            {/* Hierarchy Info Banner */}
+            <div className="mb-4 p-3 rounded-xl bg-accent-mint/10 border border-accent-mint/30 flex flex-col gap-2 text-[11px] shadow-sm">
+              <div className="flex items-center gap-1.5">
+                <svg className="w-4 h-4 text-accent-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                <span className="font-bold text-text-primary" style={{ fontFamily: "var(--font-heading), serif" }}>System Hierarchy</span>
+              </div>
+              <p className="text-text-secondary leading-relaxed">
+                <span className="font-bold text-accent-teal">Policy</span> &gt; 
+                <span className="font-bold text-accent-teal mx-1">Handbook</span> &gt; 
+                <span className="font-bold text-accent-teal mx-1">SOP</span> &gt; 
+                <span className="font-bold text-accent-teal mx-1">Memo</span>
+                <br />
+                <span className="text-[10px] opacity-80">Newer documents take precedence.</span>
+              </p>
+            </div>
+
+            {!currentResponse || displayCitations.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center opacity-60">
                 <p className="text-[12px] text-text-muted max-w-[200px]">Sources will appear here after your first query</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {currentResponse.citations.map((citation, idx) => (
+                {displayCitations.map((citation, idx) => (
                   <div 
                     key={idx} 
                     onClick={async () => {

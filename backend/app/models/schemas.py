@@ -65,6 +65,8 @@ class DocumentMeta(BaseModel):
     doc_id: str
     filename: str
     file_type: str
+    doc_type: Optional[str] = None
+    doc_date: Optional[str] = None
     chunk_count: int
     uploaded_at: datetime
     size_bytes: Optional[int] = None

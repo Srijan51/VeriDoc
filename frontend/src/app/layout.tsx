@@ -38,6 +38,9 @@ export const metadata: Metadata = {
     "knowledge management",
     "policy compliance",
   ],
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
