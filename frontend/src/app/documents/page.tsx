@@ -40,6 +40,16 @@ export default function DocumentsPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // New States for Advanced Features
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [previewDocName, setPreviewDocName] = useState<string>("");
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editType, setEditType] = useState("Policy");
+  const [editDate, setEditDate] = useState("");
+  const [isBulkActioning, setIsBulkActioning] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { addToast } = useToast();
   const hasLoadedRef = useRef(false);
@@ -204,22 +214,103 @@ export default function DocumentsPage() {
   };
 
   const handleViewDoc = async (docId: string) => {
+    const doc = documents.find(d => d.id === docId);
+    if (!doc) return;
     try {
       const response = await getDocumentViewUrl(docId);
       const url = response.url;
       const isPdf = response.filename.toLowerCase().endsWith(".pdf");
       
       if (isPdf) {
-        // Open PDF in Google Docs Viewer for in-browser viewing
-        window.open(`https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`, "_blank");
+        setPreviewDocUrl(`https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`);
+      } else if (response.filename.toLowerCase().endsWith(".txt")) {
+        setPreviewDocUrl(url);
       } else {
-        // Direct download for DOCX/TXT
         window.open(url, "_blank");
+        return;
       }
+      setPreviewDocName(doc.name);
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Failed to generate view URL. The original file might not be stored.";
+      const msg = error instanceof Error ? error.message : "Failed to generate view URL.";
       addToast(msg, "error");
     }
+  };
+
+  const handleBulkScan = async () => {
+    if (selectedDocIds.length < 2) return;
+    setIsBulkActioning(true);
+    addToast("Scanning selected documents for contradictions...", "info");
+    try {
+      const { queryDocuments } = await import("@/lib/api");
+      const queries = ["Compare these documents and identify any conflicting statements or contradictions"];
+      const seen = new Set<string>();
+      const collected: any[] = [];
+      const makeKey = (topic: string, srcA: string, srcB: string) => {
+        const normalizedTopic = topic.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sources = [srcA.toLowerCase(), srcB.toLowerCase()].sort().join('|');
+        return `${normalizedTopic}::${sources}`;
+      };
+
+      for (const query of queries) {
+        const response = await queryDocuments(query, selectedDocIds, 10);
+        for (const contradiction of response.contradictions) {
+          const key = makeKey(contradiction.topic, contradiction.source_a, contradiction.source_b);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const c = contradiction;
+          collected.push({
+            id: `contradiction-${collected.length}`,
+            severity: c.severity.toLowerCase() === "critical" ? "critical" : c.severity.toLowerCase() === "high" ? "high" : c.severity.toLowerCase() === "medium" ? "medium" : "low",
+            topic: c.topic,
+            sourceA: c.source_a,
+            claimA: c.claim_a,
+            sourceB: c.source_b,
+            claimB: c.claim_b,
+            authoritySource: c.authoritative_source,
+            reason: c.reason,
+          });
+        }
+      }
+      sessionStorage.setItem("veridoc_scanned_contradictions", JSON.stringify(collected));
+      window.location.href = "/contradictions";
+    } catch (error) {
+      addToast("Scan failed", "error");
+      setIsBulkActioning(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${selectedDocIds.length} documents?`)) return;
+    setIsBulkActioning(true);
+    try {
+      for (const id of selectedDocIds) {
+        await deleteDocument(id);
+      }
+      addToast(`Deleted ${selectedDocIds.length} documents`, "success");
+      setSelectedDocIds([]);
+      await loadDocuments(true);
+    } catch (error) {
+      addToast("Failed to delete some documents", "error");
+    } finally {
+      setIsBulkActioning(false);
+    }
+  };
+
+  const handleEditSave = () => {
+    if (!editingDocId) return;
+    setDocuments(prev => prev.map(d => {
+      if (d.id === editingDocId) {
+        let authScore = 50;
+        if (editType === "Policy") authScore = 100;
+        else if (editType === "Handbook") authScore = 80;
+        else if (editType === "SOP") authScore = 60;
+        else if (editType === "Memo") authScore = 40;
+        return { ...d, category: editType, docDate: editDate, authorityScore: authScore };
+      }
+      return d;
+    }));
+    addToast("Document metadata updated locally (Backend save requires API update).", "success");
+    setEditingDocId(null);
   };
 
   const handleDeleteDoc = async () => {
@@ -290,6 +381,34 @@ export default function DocumentsPage() {
           </div>
         }
       />
+
+      {/* Bulk Actions Bar */}
+      {selectedDocIds.length > 0 && (
+        <div className="mb-6 p-4 rounded-xl glass border border-accent-mint/30 flex flex-wrap items-center justify-between gap-4 animate-fade-in shadow-sm bg-accent-mint/5">
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-full bg-accent-mint text-white text-[12px] font-bold">
+              {selectedDocIds.length}
+            </span>
+            <span className="text-[13px] font-medium text-text-primary">Documents Selected</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBulkScan}
+              disabled={selectedDocIds.length < 2 || isBulkActioning}
+              className="px-4 py-2 rounded-xl text-[12px] font-semibold text-white bg-accent-teal hover:bg-accent-mint transition-colors disabled:opacity-50 shadow-sm"
+            >
+              {isBulkActioning ? "Scanning..." : "Scan for Contradictions"}
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={isBulkActioning}
+              className="px-4 py-2 rounded-xl text-[12px] font-semibold border border-severity-critical/30 text-severity-critical hover:bg-severity-critical hover:text-white transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Upload Zone */}
       {isUploadOpen && (
@@ -507,6 +626,17 @@ export default function DocumentsPage() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-border bg-white/30 backdrop-blur-sm">
+                <th className="py-3 px-4 w-[40px]">
+                  <input 
+                    type="checkbox" 
+                    checked={selectedDocIds.length === filteredDocuments.length && filteredDocuments.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedDocIds(filteredDocuments.map(d => d.id));
+                      else setSelectedDocIds([]);
+                    }}
+                    className="w-4 h-4 rounded border-border text-accent-mint focus:ring-accent-mint cursor-pointer"
+                  />
+                </th>
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
                   #
                 </th>
@@ -539,6 +669,17 @@ export default function DocumentsPage() {
                   key={doc.id}
                   className="border-b border-border/50 hover:bg-white/40 transition-colors"
                 >
+                  <td className="py-3 px-4">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedDocIds.includes(doc.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedDocIds([...selectedDocIds, doc.id]);
+                        else setSelectedDocIds(selectedDocIds.filter(id => id !== doc.id));
+                      }}
+                      className="w-4 h-4 rounded border-border text-accent-mint focus:ring-accent-mint cursor-pointer"
+                    />
+                  </td>
                   <td className="py-3 px-4 text-[12px] font-mono text-text-muted">
                     {index + 1}
                   </td>
@@ -589,6 +730,16 @@ export default function DocumentsPage() {
                         View
                       </button>
                       <button
+                        onClick={() => {
+                          setEditingDocId(doc.id);
+                          setEditType(doc.category);
+                          setEditDate(doc.docDate !== "Unknown" ? doc.docDate : "");
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-accent-teal border border-accent-teal/30 hover:bg-accent-teal/10 transition-all"
+                      >
+                        Edit
+                      </button>
+                      <button
                         onClick={() => setDeleteTarget({ id: doc.id, name: doc.name })}
                         className="px-3 py-1.5 rounded-lg text-[11px] font-medium text-severity-critical border border-severity-critical/30 hover:bg-severity-critical hover:text-white transition-all"
                       >
@@ -601,7 +752,55 @@ export default function DocumentsPage() {
             </tbody>
           </table>
         )}
-      </div>
+
+      {/* Document Preview Modal */}
+      {previewDocUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col border border-border">
+            <div className="flex items-center justify-between p-4 border-b border-border bg-bg-primary rounded-t-2xl">
+              <h2 className="text-[15px] font-bold text-text-primary flex items-center gap-2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                {previewDocName}
+              </h2>
+              <button onClick={() => { setPreviewDocUrl(null); setPreviewDocName(""); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white border border-transparent hover:border-border text-text-muted hover:text-text-primary transition-all">✕</button>
+            </div>
+            <div className="flex-1 bg-white rounded-b-2xl overflow-hidden relative">
+              <iframe src={previewDocUrl} className="w-full h-full border-0 absolute inset-0" title="Document Preview" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingDocId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 border border-border">
+            <h2 className="text-[18px] font-bold text-text-primary mb-6">Edit Document Metadata</h2>
+            
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted uppercase mb-1.5">Document Category</label>
+                <select value={editType} onChange={e => setEditType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-[13px] outline-none focus:border-accent-mint bg-transparent">
+                  <option value="Policy">Policy (Score 100)</option>
+                  <option value="Handbook">Handbook (Score 80)</option>
+                  <option value="SOP">SOP (Score 60)</option>
+                  <option value="Memo">Memo (Score 40)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold text-text-muted uppercase mb-1.5">Effective Date</label>
+                <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-[13px] outline-none focus:border-accent-mint bg-transparent" />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setEditingDocId(null)} className="px-4 py-2 rounded-xl text-[13px] font-medium text-text-secondary border border-border hover:bg-bg-primary transition-colors">Cancel</button>
+              <button onClick={handleEditSave} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white bg-accent-mint hover:bg-accent-teal transition-colors shadow-sm">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
 
       <FileDetailsModal
         isOpen={isFileDetailsOpen}

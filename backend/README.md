@@ -190,3 +190,6 @@ List all uploaded documents with metadata.
 - Set `ENVIRONMENT=production` in your hosting environment.
 - Add your Vercel frontend URL to `ALLOWED_ORIGINS`.
 - Supabase tables, vector extension, and RPC functions must be created manually via `supabase_schema.sql`.
+
+
+do it according to the implementation plan, add the effective date column and the authority scores should not be displayed to the user, its not a problem if it is still used in the backend

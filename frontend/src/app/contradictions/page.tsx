@@ -43,6 +43,11 @@ function toCard(contradiction: Contradiction, index: number): ContradictionCard 
 
 export default function ContradictionsPage() {
   const [contradictions, setContradictions] = useState<ContradictionCard[]>([]);
+  const [resolvedContradictions, setResolvedContradictions] = useState<ContradictionCard[]>([]);
+  const [viewMode, setViewMode] = useState<"active" | "history">("active");
+  const [showTargetedModal, setShowTargetedModal] = useState(false);
+  const [allDocs, setAllDocs] = useState<{ id: string; name: string }[]>([]);
+  const [selectedTargetDocs, setSelectedTargetDocs] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
   const [activeSeverity, setActiveSeverity] = useState("All");
@@ -55,6 +60,7 @@ export default function ContradictionsPage() {
       try {
         const docResponse = await fetchDocuments();
         setDocumentCount(docResponse.total);
+        setAllDocs(docResponse.documents.map(d => ({ id: d.doc_id, name: d.filename })));
       } catch {
         setDocumentCount(0);
       }
@@ -91,6 +97,11 @@ export default function ContradictionsPage() {
         }
       }
     }
+    
+    try {
+      const resolved = localStorage.getItem("veridoc_resolved_contradictions");
+      if (resolved) setResolvedContradictions(JSON.parse(resolved));
+    } catch {}
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -155,19 +166,89 @@ export default function ContradictionsPage() {
     }
   };
 
+  const handleResolve = (id: string) => {
+    const item = contradictions.find(c => c.id === id);
+    if (!item) return;
+    const newResolved = [item, ...resolvedContradictions];
+    setResolvedContradictions(newResolved);
+    localStorage.setItem("veridoc_resolved_contradictions", JSON.stringify(newResolved));
+    
+    const newActive = contradictions.filter(c => c.id !== id);
+    setContradictions(newActive);
+    sessionStorage.setItem("veridoc_scanned_contradictions", JSON.stringify(newActive));
+    addToast("Contradiction marked as resolved", "success");
+  };
+
+  const runTargetedScan = async () => {
+    if (selectedTargetDocs.length < 2) {
+      addToast("Please select at least 2 documents", "error");
+      return;
+    }
+    
+    setShowTargetedModal(false);
+    setIsLoading(true);
+    setHasScanned(true);
+    setScanSource("manual");
+    setViewMode("active");
+
+    try {
+      const queries = ["Compare these documents and identify any conflicting statements or contradictions"];
+      const seen = new Set<string>();
+      const collected: ContradictionCard[] = [];
+
+      const makeKey = (topic: string, srcA: string, srcB: string) => {
+        const normalizedTopic = topic.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sources = [srcA.toLowerCase(), srcB.toLowerCase()].sort().join('|');
+        return `${normalizedTopic}::${sources}`;
+      };
+
+      for (const query of queries) {
+        try {
+          const response = await queryDocuments(query, selectedTargetDocs, 10);
+          for (const contradiction of response.contradictions) {
+            const key = makeKey(contradiction.topic, contradiction.source_a, contradiction.source_b);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            collected.push(toCard(contradiction, collected.length));
+          }
+        } catch (error) {
+          console.warn("Query failed:", error);
+        }
+      }
+
+      setContradictions(collected);
+      try {
+        sessionStorage.setItem("veridoc_scanned_contradictions", JSON.stringify(collected));
+      } catch {}
+      addToast(
+        collected.length === 0 ? "✅ No contradictions detected!" : `Found ${collected.length} contradiction(s)`,
+        collected.length === 0 ? "success" : "warning"
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to fetch contradictions";
+      addToast(message, "error");
+      setContradictions([]);
+    } finally {
+      setIsLoading(false);
+      setSelectedTargetDocs([]);
+    }
+  };
+
+  const currentList = viewMode === "active" ? contradictions : resolvedContradictions;
+  
   const filteredContradictions = useMemo(
-    () => (activeSeverity === "All" ? contradictions : contradictions.filter((item) => item.severity === activeSeverity.toLowerCase())),
-    [activeSeverity, contradictions]
+    () => (activeSeverity === "All" ? currentList : currentList.filter((item) => item.severity === activeSeverity.toLowerCase())),
+    [activeSeverity, currentList]
   );
 
   const severityCounts = useMemo(
     () => ({
-      Critical: contradictions.filter((item) => item.severity === "critical").length,
-      High: contradictions.filter((item) => item.severity === "high").length,
-      Medium: contradictions.filter((item) => item.severity === "medium").length,
-      Low: contradictions.filter((item) => item.severity === "low").length,
+      Critical: currentList.filter((item) => item.severity === "critical").length,
+      High: currentList.filter((item) => item.severity === "high").length,
+      Medium: currentList.filter((item) => item.severity === "medium").length,
+      Low: currentList.filter((item) => item.severity === "low").length,
     }),
-    [contradictions]
+    [currentList]
   );
 
   return (
@@ -178,10 +259,16 @@ export default function ContradictionsPage() {
         actions={
           <div className="flex gap-3">
             <button
-              onClick={() => addToast("Export coming soon!", "info")}
+              onClick={() => setShowTargetedModal(true)}
               className="px-4 py-2 rounded-xl text-[13px] font-semibold border border-white/60 glass-panel text-text-primary hover:bg-white/40 transition-all"
             >
-              Export Report
+              Targeted Search
+            </button>
+            <button
+              onClick={() => setViewMode(viewMode === "active" ? "history" : "active")}
+              className={`px-4 py-2 rounded-xl text-[13px] font-semibold border transition-all ${viewMode === "history" ? "bg-text-primary text-white border-transparent" : "glass-panel border-white/60 text-text-primary hover:bg-white/40"}`}
+            >
+              {viewMode === "active" ? "View History" : "View Active"}
             </button>
             <button
               onClick={runScan}
@@ -189,7 +276,7 @@ export default function ContradictionsPage() {
               className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white hover:opacity-90 transition-all disabled:opacity-50"
               style={{ backgroundColor: "var(--accent-mint)" }}
             >
-              {isLoading ? "Scanning..." : "Scan for Contradictions"}
+              {isLoading ? "Scanning..." : "Scan All"}
             </button>
           </div>
         }
@@ -215,10 +302,10 @@ export default function ContradictionsPage() {
           }
           action={{ label: "Scan Now", onClick: runScan }}
         />
-      ) : contradictions.length === 0 ? (
+      ) : currentList.length === 0 ? (
         <EmptyState
-          title="No Contradictions Found"
-          description="Your documents are consistent and free of contradictions."
+          title={viewMode === "active" ? "No Contradictions Found" : "No Resolved Contradictions"}
+          description={viewMode === "active" ? "Your documents are consistent and free of contradictions." : "You haven't resolved any contradictions yet."}
           icon={
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
               <circle cx="12" cy="12" r="10" />
@@ -229,7 +316,7 @@ export default function ContradictionsPage() {
       ) : (
         <>
           {/* Source Banner */}
-          {scanSource === "ai" && (
+          {scanSource === "ai" && viewMode === "active" && (
             <div className="mb-6 p-4 rounded-xl glass-card border border-accent-mint/30 flex items-center justify-between" style={{ backgroundColor: "rgba(0, 201, 167, 0.05)" }}>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-full bg-accent-mint/15 flex items-center justify-center">
@@ -251,7 +338,7 @@ export default function ContradictionsPage() {
               </button>
             </div>
           )}
-          {scanSource === "manual" && (
+          {scanSource === "manual" && viewMode === "active" && (
             <div className="mb-6 p-3 rounded-xl glass-card border border-white/60 flex items-center gap-3">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2">
                 <circle cx="11" cy="11" r="8" />
@@ -335,18 +422,67 @@ export default function ContradictionsPage() {
                       <p className="text-[11px] text-text-muted mb-1">Authoritative Source</p>
                       <p className="text-[12px] font-medium text-accent-mint">{contradiction.authoritySource}</p>
                     </div>
-                    <button
-                      onClick={() => addToast("Opening source comparison...", "info")}
-                      className="px-4 py-2 rounded-lg border border-white/60 glass-panel text-[12px] font-medium text-text-primary hover:bg-white/40 transition-colors"
-                    >
-                      Review Sources
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => addToast("Opening source comparison...", "info")}
+                        className="px-4 py-2 rounded-lg border border-white/60 glass-panel text-[12px] font-medium text-text-primary hover:bg-white/40 transition-colors"
+                      >
+                        Review Sources
+                      </button>
+                      {viewMode === "active" && (
+                        <button
+                          onClick={() => handleResolve(contradiction.id)}
+                          className="px-4 py-2 rounded-lg bg-accent-teal text-white text-[12px] font-medium hover:bg-accent-mint transition-colors flex items-center gap-1.5 shadow-sm"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                          Resolve
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
             )}
           </div>
         </>
+      )}
+
+      {showTargetedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 m-4 max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[18px] font-bold text-text-primary">Targeted Search</h2>
+              <button onClick={() => setShowTargetedModal(false)} className="text-text-muted hover:text-text-primary">✕</button>
+            </div>
+            <p className="text-[13px] text-text-secondary mb-4">Select 2 or more documents to scan exclusively for contradictions between them.</p>
+            <div className="flex-1 overflow-y-auto border border-border rounded-xl p-2 mb-4 space-y-1">
+              {allDocs.map(doc => (
+                <label key={doc.id} className="flex items-center gap-3 p-2 hover:bg-bg-primary rounded-lg cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={selectedTargetDocs.includes(doc.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedTargetDocs([...selectedTargetDocs, doc.id]);
+                      else setSelectedTargetDocs(selectedTargetDocs.filter(id => id !== doc.id));
+                    }}
+                    className="w-4 h-4 rounded border-border text-accent-mint focus:ring-accent-mint"
+                  />
+                  <span className="text-[13px] font-medium text-text-primary truncate">{doc.name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={() => setShowTargetedModal(false)} className="px-4 py-2 rounded-xl text-[13px] font-medium text-text-secondary border border-border hover:bg-bg-primary transition-colors">Cancel</button>
+              <button
+                onClick={runTargetedScan}
+                disabled={selectedTargetDocs.length < 2}
+                className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white bg-accent-mint hover:bg-accent-teal disabled:opacity-50 transition-colors"
+              >
+                Scan Selected ({selectedTargetDocs.length})
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
