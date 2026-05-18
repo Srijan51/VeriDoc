@@ -6,6 +6,7 @@ similarity search using Google's text-embedding-004 model.
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from typing import Any
 
 from google import genai
@@ -65,9 +66,10 @@ def _embed_texts(texts: list[str]) -> list[list[float]]:
     return embeddings
 
 
-def _embed_query(text: str) -> list[float]:
-    """Embed a single query string."""
-    client = _get_genai_client()
+@lru_cache(maxsize=256)
+def _embed_query(api_key: str, text: str) -> tuple[float, ...]:
+    """Embed a single query string with an LRU cache keyed by api_key and text."""
+    client = genai.Client(api_key=api_key)
     result = client.models.embed_content(
         model=EMBED_MODEL,
         contents=text,
@@ -76,7 +78,50 @@ def _embed_query(text: str) -> list[float]:
             output_dimensionality=EMBEDDING_DIM,
         ),
     )
-    return result.embeddings[0].values
+    return tuple(result.embeddings[0].values)
+
+
+@lru_cache(maxsize=128)
+def _similarity_search_cached(
+    query: str,
+    doc_ids_key: frozenset[str],
+    top_k: int,
+) -> tuple[dict[str, Any], ...]:
+    """Cached similarity search keyed by query, doc_ids set, and top_k."""
+    settings = get_settings()
+    supabase = _get_client()
+    query_emb = list(_embed_query(settings.gemini_api_key, query))
+    filter_doc_ids = sorted(doc_ids_key)
+
+    rpc_params = {
+        "query_embedding": query_emb,
+        "match_threshold": -1.0,
+        "match_count": top_k,
+        "filter_doc_ids": filter_doc_ids,
+    }
+
+    logger.info("Running similarity search with top_k=%d, filter_doc_ids=%s", top_k, filter_doc_ids)
+    response = supabase.rpc("match_document_chunks", rpc_params).execute()
+    logger.info("RPC returned %d results", len(response.data))
+
+    results: list[dict[str, Any]] = []
+    for match in response.data:
+        results.append(
+            {
+                "doc_id": match.get("doc_id", ""),
+                "filename": match.get("filename", ""),
+                "chunk_index": int(match.get("chunk_index", 0)),
+                "text": match.get("text", ""),
+                "score": float(match.get("similarity", 0.0)),
+                "doc_type": match.get("doc_type", "unknown"),
+                "doc_date": match.get("doc_date", "unknown"),
+            }
+        )
+
+    unique_files = set(r["filename"] for r in results)
+    logger.info("Unique documents in results: %s", unique_files)
+
+    return tuple(results)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -128,39 +173,9 @@ def similarity_search(
     The RPC now returns doc_type and doc_date directly via JOIN with documents table.
     Returns a list of dicts with keys: doc_id, filename, chunk_index, text, score, doc_type, doc_date
     """
-    supabase = _get_client()
-    query_emb = _embed_query(query)
-
-    rpc_params = {
-        "query_embedding": query_emb,
-        "match_threshold": -1.0,
-        "match_count": top_k,
-        "filter_doc_ids": doc_ids if doc_ids else [],
-    }
-
-    logger.info("Running similarity search with top_k=%d, filter_doc_ids=%s", top_k, doc_ids)
-    response = supabase.rpc("match_document_chunks", rpc_params).execute()
-    logger.info("RPC returned %d results", len(response.data))
-
-    results = []
-    for match in response.data:
-        results.append(
-            {
-                "doc_id": match.get("doc_id", ""),
-                "filename": match.get("filename", ""),
-                "chunk_index": int(match.get("chunk_index", 0)),
-                "text": match.get("text", ""),
-                "score": float(match.get("similarity", 0.0)),
-                "doc_type": match.get("doc_type", "unknown"),
-                "doc_date": match.get("doc_date", "unknown"),
-            }
-        )
-
-    # Log unique documents found for debugging
-    unique_files = set(r["filename"] for r in results)
-    logger.info("Unique documents in results: %s", unique_files)
-
-    return results
+    doc_ids_key = frozenset(doc_ids or [])
+    cached_results = _similarity_search_cached(query, doc_ids_key, top_k)
+    return [dict(item) for item in cached_results]
 
 
 def delete_document_vectors(doc_id: str) -> None:

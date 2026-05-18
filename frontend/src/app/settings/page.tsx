@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { deleteAccount, deleteAllDocuments, fetchModels, healthCheck } from "@/lib/api";
+import { deleteAccount, deleteAllDocuments, healthCheck } from "@/lib/api";
+import { useDocuments } from "@/lib/hooks/useDocuments";
 import { useToast } from "@/lib/hooks/useToast";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRouter } from "next/navigation";
@@ -23,13 +24,12 @@ export default function SettingsPage() {
   const [dangerActionType, setDangerActionType] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
-  const [generationModel, setGenerationModel] = useState("llama-3.3-70b-versatile");
-  const [environmentName, setEnvironmentName] = useState("development");
+  const [systemMessage, setSystemMessage] = useState("");
   const [avatarColor, setAvatarColor] = useState("#00C9A7");
   const [showColorPicker, setShowColorPicker] = useState(false);
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
   const { addToast } = useToast();
   const { user, signOut } = useAuth();
+  const { documents, refreshDocuments } = useDocuments();
   const router = useRouter();
 
   useEffect(() => {
@@ -70,33 +70,36 @@ export default function SettingsPage() {
       return;
     }
 
-    fetchModels()
-      .then((response) => {
-        const configuredModel = response.available_models?.[0];
-        if (configuredModel) {
-          setGenerationModel(configuredModel);
-        }
-      })
-      .catch(() => {
-        setGenerationModel("llama-3.3-70b-versatile");
-      });
+    void refreshDocuments();
+  }, [activeTab, refreshDocuments]);
 
-    healthCheck()
-      .then((response) => {
-        setBackendStatus("online");
-        const healthData = response as unknown as Record<string, unknown>;
-        const envValue =
-          (typeof healthData.environment === "string" && healthData.environment) ||
-          (typeof healthData.env === "string" && healthData.env) ||
-          (typeof healthData.node_env === "string" && healthData.node_env) ||
-          "development";
-        setEnvironmentName(envValue);
-      })
-      .catch(() => {
-        setBackendStatus("offline");
-        setEnvironmentName("development");
-      });
-  }, [activeTab]);
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString()
+    : "Not available";
+  const approxSizePerDocMb = 0.25;
+  const approxStorageUsedMb = documents.length * approxSizePerDocMb;
+  const storageSummary = `${documents.length} × ~${approxSizePerDocMb.toFixed(2)} MB ≈ ~${approxStorageUsedMb.toFixed(2)} MB`;
+
+  const lastUploadedDate = documents.length
+    ? new Date(
+        documents
+          .map((doc) => new Date(doc.uploaded_at).getTime())
+          .sort((a, b) => b - a)[0]
+      ).toLocaleDateString()
+    : "No uploads yet";
+
+  let contradictionsDetected = documents.length;
+  try {
+    const scanned = sessionStorage.getItem("veridoc_scanned_contradictions");
+    if (scanned) {
+      const parsed = JSON.parse(scanned);
+      if (Array.isArray(parsed)) {
+        contradictionsDetected = parsed.length;
+      }
+    }
+  } catch {
+    contradictionsDetected = documents.length;
+  }
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -424,86 +427,70 @@ export default function SettingsPage() {
               System Status
             </h2>
             <p className="text-[14px] text-text-muted mb-8">
-              Check backend connectivity
+              Overview of your account and knowledge base health
             </p>
-            
+
             <div className="glass-card rounded-2xl shadow-sm p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className={`w-3 h-3 rounded-full ${backendStatus === "online" ? "bg-accent-mint animate-pulse" : backendStatus === "offline" ? "bg-severity-critical" : "bg-severity-medium animate-pulse"}`} />
-                <span className="text-[14px] font-medium text-text-primary">
-                  Backend: {backendStatus === "online" ? "Connected" : backendStatus === "offline" ? "Disconnected" : "Checking..."}
-                </span>
+              <h3 className="text-[16px] font-bold text-text-primary mb-4">Account Status</h3>
+              <div className="space-y-0">
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Account email</p>
+                  <p className="text-[13px] font-medium text-text-primary">{user?.email || "Not available"}</p>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Member since</p>
+                  <p className="text-[13px] font-medium text-text-primary">{memberSince}</p>
+                </div>
+                <div className="flex items-center justify-between py-3">
+                  <p className="text-[13px] text-text-secondary">Storage used</p>
+                  <p className="text-[13px] font-medium text-text-primary">{storageSummary}</p>
+                </div>
               </div>
-              <p className="text-[12px] text-text-muted mb-4" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
-                {backendUrl}
-              </p>
+            </div>
+
+            <div className="glass-card rounded-2xl shadow-sm p-6 mt-6">
+              <h3 className="text-[16px] font-bold text-text-primary mb-4">Knowledge Base Health</h3>
+              <div className="space-y-0">
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Total documents indexed</p>
+                  <p className="text-[13px] font-medium text-text-primary">{documents.length}</p>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Last document uploaded</p>
+                  <p className="text-[13px] font-medium text-text-primary">{lastUploadedDate}</p>
+                </div>
+                <div className="flex items-center justify-between py-3">
+                  <p className="text-[13px] text-text-secondary">Contradictions detected</p>
+                  <p className="text-[13px] font-medium text-text-primary">{contradictionsDetected}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col items-start gap-3">
               <button
                 onClick={() => {
                   setBackendStatus("checking");
+                  setSystemMessage("");
                   healthCheck()
-                    .then(() => { setBackendStatus("online"); addToast("Backend is online", "success"); })
-                    .catch(() => { setBackendStatus("offline"); addToast("Cannot reach backend", "error"); });
+                    .then(() => {
+                      setBackendStatus("online");
+                      setSystemMessage("Everything is working");
+                    })
+                    .catch(() => {
+                      setBackendStatus("offline");
+                      setSystemMessage("Cannot reach server — try again later");
+                    });
                 }}
                 className="px-4 py-2 rounded-lg text-[13px] font-medium border border-border glass-panel hover:bg-white/40 transition-colors"
               >
                 Test Connection
               </button>
-            </div>
 
-            <div className="glass-card rounded-2xl shadow-sm p-6 mt-6">
-              <h3 className="text-[16px] font-bold text-text-primary mb-4">AI Models</h3>
-              <div className="space-y-0">
-                <div className="flex items-center justify-between py-3 border-b border-border/30">
-                  <p className="text-[13px] text-text-secondary">Generation Model: {generationModel}</p>
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b border-border/30">
-                  <p className="text-[13px] text-text-secondary">Embedding Model: gemini-embedding-001</p>
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <p className="text-[13px] text-text-secondary">Embedding Dimensions: 768</p>
-                  <span className="text-[12px] font-medium text-text-primary">Configured</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="glass-card rounded-2xl shadow-sm p-6 mt-6">
-              <h3 className="text-[16px] font-bold text-text-primary mb-4">Storage</h3>
-              <div className="space-y-0">
-                <div className="flex items-center justify-between py-3 border-b border-border/30">
-                  <p className="text-[13px] text-text-secondary">Vector Store: Supabase pgvector</p>
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b border-border/30">
-                  <p className="text-[13px] text-text-secondary">Document Storage: Supabase Storage Bucket</p>
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <p className="text-[13px] text-text-secondary">Metadata Store: PostgreSQL (via Supabase)</p>
-                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="glass-card rounded-2xl shadow-sm p-6 mt-6">
-              <h3 className="text-[16px] font-bold text-text-primary mb-4">Environment</h3>
-              <div className="space-y-0">
-                <div className="flex items-center justify-between py-3 border-b border-border/30">
-                  <p className="text-[13px] text-text-secondary">Runtime Environment</p>
-                  <span className="text-[12px] font-medium text-text-primary" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
-                    {environmentName}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b border-border/30">
-                  <p className="text-[13px] text-text-secondary">Frontend Version: Next.js 16</p>
-                  <span className="text-[12px] font-medium text-text-primary">Active</span>
-                </div>
-                <div className="flex items-center justify-between py-3">
-                  <p className="text-[13px] text-text-secondary">API Version: 1.0.0</p>
-                  <span className="text-[12px] font-medium text-text-primary">Active</span>
-                </div>
-              </div>
+              {systemMessage && (
+                <p className={`text-[13px] font-medium ${backendStatus === "online" ? "text-accent-teal" : "text-severity-critical"}`}>
+                  {systemMessage}
+                </p>
+              )}
             </div>
           </div>
         )}

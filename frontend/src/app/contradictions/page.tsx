@@ -320,7 +320,7 @@ export default function ContradictionsPage() {
         </div>
       ) : !hasScanned ? (
         <div className="mt-2">
-          <div className="grid grid-cols-2 gap-6 mb-6">
+          <div className="grid grid-cols-1 gap-6 mb-6">
             <div className="glass-card rounded-xl p-6 border border-white/60 shadow-sm">
               <h3 className="text-[18px] font-bold text-text-primary mb-5">How It Works</h3>
               <div className="space-y-4">
@@ -353,46 +353,6 @@ export default function ContradictionsPage() {
                 ))}
               </div>
             </div>
-
-            <div className="glass-card rounded-xl border border-white/60 p-6 shadow-sm hover:border-white/80 transition-colors relative" style={{ borderLeftWidth: "4px", borderLeftColor: "var(--severity-high)" }}>
-              <span className="absolute top-4 right-4 px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider font-bold glass-panel text-text-muted border border-white/60">
-                Example
-              </span>
-
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-start gap-4 flex-1">
-                  <div className="w-1 h-12 rounded-full flex-shrink-0" style={{ backgroundColor: "var(--severity-high)" }} />
-                  <div className="flex-1 pr-16">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-[16px] font-bold text-text-primary">Annual Leave Days</h3>
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold text-white" style={{ backgroundColor: "var(--severity-high)" }}>
-                        HIGH
-                      </span>
-                    </div>
-                    <p className="text-[13px] text-text-secondary mb-4">Policy document (2024) supersedes Handbook (2021)</p>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 rounded-lg bg-white/20 border border-white/40">
-                        <p className="text-[11px] font-bold text-text-primary mb-1">Source A</p>
-                        <p className="text-[12px] text-text-muted mb-2 font-medium">HR_Policy_2024.pdf</p>
-                        <p className="text-[12px] text-text-secondary leading-relaxed">&quot;15 days paid leave per year&quot;</p>
-                      </div>
-                      <div className="p-3 rounded-lg bg-white/20 border border-white/40">
-                        <p className="text-[11px] font-bold text-text-primary mb-1">Source B</p>
-                        <p className="text-[12px] text-text-muted mb-2 font-medium">Employee_Handbook_2021.pdf</p>
-                        <p className="text-[12px] text-text-secondary leading-relaxed">&quot;12 days paid leave per year&quot;</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-white/40">
-                <div>
-                  <p className="text-[11px] text-text-muted mb-1">Authoritative Source</p>
-                  <p className="text-[12px] font-medium text-accent-mint">HR_Policy_2024.pdf</p>
-                </div>
-              </div>
-            </div>
           </div>
 
           <div className="flex justify-center">
@@ -408,7 +368,7 @@ export default function ContradictionsPage() {
         </div>
       ) : currentList.length === 0 ? (
         <EmptyState
-          title={viewMode === "active" ? "No Contradictions Found" : "No Resolved Contradictions"}
+          title={viewMode === "active" ? "No Contradictions Found" : "No History"}
           description={viewMode === "active" ? "Your documents are consistent and free of contradictions." : "You haven't resolved any contradictions yet."}
           icon={
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
