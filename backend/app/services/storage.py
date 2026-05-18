@@ -83,7 +83,7 @@ def get_all_documents(user_id: str | None = None) -> list[dict]:
     """
     client = _get_client()
     query = client.table("documents").select(
-        "doc_id, filename, file_type, doc_type, doc_date, chunk_count, uploaded_at, size_bytes"
+        "doc_id, filename, file_type, doc_type, doc_date, chunk_count, uploaded_at, size_bytes, file_path"
     )
     if user_id:
         query = query.eq("user_id", user_id)
@@ -105,6 +105,22 @@ def get_document_by_id(doc_id: str) -> dict | None:
         .execute()
     )
     return response.data
+
+
+def get_document_by_filename(user_id: str, filename: str) -> dict | None:
+    """Fetch a document record for a user by exact filename match."""
+    client = _get_client()
+    response = (
+        client.table("documents")
+        .select("doc_id, filename")
+        .eq("user_id", user_id)
+        .eq("filename", filename)
+        .limit(1)
+        .execute()
+    )
+
+    rows = response.data or []
+    return rows[0] if rows else None
 
 
 def delete_document_metadata(doc_id: str) -> None:
@@ -197,4 +213,11 @@ def update_document_file_path(doc_id: str, file_path: str) -> None:
     client = _get_client()
     client.table("documents").update({"file_path": file_path}).eq("doc_id", doc_id).execute()
     logger.info("Updated file_path for doc_id=%s", doc_id)
+
+
+def delete_file_from_storage(file_path: str) -> None:
+    """Delete an uploaded file from Supabase Storage."""
+    client = _get_client()
+    client.storage.from_(STORAGE_BUCKET).remove([file_path])
+    logger.info("Deleted file from storage: %s", file_path)
 

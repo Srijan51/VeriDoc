@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import ToggleSwitch from "@/components/ui/ToggleSwitch";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { deleteAllDocuments, healthCheck } from "@/lib/api";
+import { deleteAccount, deleteAllDocuments, fetchModels, healthCheck } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
+import { useAuth } from "@/lib/hooks/useAuth";
+import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("Profile");
@@ -22,21 +23,37 @@ export default function SettingsPage() {
   const [dangerActionType, setDangerActionType] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
+  const [generationModel, setGenerationModel] = useState("llama-3.3-70b-versatile");
+  const [environmentName, setEnvironmentName] = useState("development");
   const [avatarColor, setAvatarColor] = useState("#00C9A7");
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
   const { addToast } = useToast();
+  const { user, signOut } = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
-    // Load profile from localStorage
-    const saved = localStorage.getItem("veridoc_profile");
-    if (saved) {
-      try {
-        setProfileData(JSON.parse(saved));
-      } catch {
-        // Ignore corrupt data
+    try {
+      const savedProfile = localStorage.getItem("veridoc_profile");
+      if (savedProfile) {
+        const parsedProfile = JSON.parse(savedProfile);
+        if (parsedProfile && typeof parsedProfile === "object") {
+          setProfileData((current) => ({
+            ...current,
+            ...parsedProfile,
+          }));
+        }
       }
-    } else {
-      setProfileData({ name: "Admin", email: "admin@company.com", role: "Admin" });
+    } catch {
+      // Ignore malformed saved profile data.
+    }
+
+    if (user) {
+      setProfileData({
+        name: user.user_metadata?.full_name || user.email?.split("@")[0] || "User",
+        email: user.email || "",
+        role: "User",
+      });
     }
 
     const savedColor = localStorage.getItem("veridoc_avatar_color");
@@ -47,6 +64,39 @@ export default function SettingsPage() {
       .then(() => setBackendStatus("online"))
       .catch(() => setBackendStatus("offline"));
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "System") {
+      return;
+    }
+
+    fetchModels()
+      .then((response) => {
+        const configuredModel = response.available_models?.[0];
+        if (configuredModel) {
+          setGenerationModel(configuredModel);
+        }
+      })
+      .catch(() => {
+        setGenerationModel("llama-3.3-70b-versatile");
+      });
+
+    healthCheck()
+      .then((response) => {
+        setBackendStatus("online");
+        const healthData = response as unknown as Record<string, unknown>;
+        const envValue =
+          (typeof healthData.environment === "string" && healthData.environment) ||
+          (typeof healthData.env === "string" && healthData.env) ||
+          (typeof healthData.node_env === "string" && healthData.node_env) ||
+          "development";
+        setEnvironmentName(envValue);
+      })
+      .catch(() => {
+        setBackendStatus("offline");
+        setEnvironmentName("development");
+      });
+  }, [activeTab]);
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
@@ -68,8 +118,46 @@ export default function SettingsPage() {
       try {
         const result = await deleteAllDocuments();
         addToast(result.message, "success");
+        localStorage.removeItem("veridoc_resolved_contradictions");
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Failed to delete documents";
+        addToast(msg, "error");
+      } finally {
+        setIsDeleting(false);
+      }
+    } else if (dangerActionType === "delete_account") {
+      setIsDeleting(true);
+      try {
+        const result = await deleteAccount();
+        localStorage.removeItem("veridoc_profile");
+        localStorage.removeItem("veridoc_avatar_color");
+        addToast(result.message, "success");
+        await signOut();
+        router.replace("/login?message=Account%20deleted%20successfully.%20Please%20sign%20in%20to%20continue.");
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to delete account";
+        addToast(msg, "error");
+      } finally {
+        setIsDeleting(false);
+      }
+    } else if (dangerActionType === "reset_org") {
+      setIsDeleting(true);
+      try {
+        await deleteAllDocuments();
+        localStorage.removeItem("veridoc_profile");
+        localStorage.removeItem("veridoc_avatar_color");
+        localStorage.removeItem("veridoc_resolved_contradictions");
+        sessionStorage.removeItem("veridoc_scanned_contradictions");
+        sessionStorage.removeItem("veridoc_detected_contradictions");
+        setProfileData({
+          name: user?.user_metadata?.full_name || user?.email?.split("@")[0] || "User",
+          email: user?.email || "",
+          role: "User",
+        });
+        setAvatarColor("#00C9A7");
+        addToast("Organization reset successfully", "success");
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Failed to reset organization";
         addToast(msg, "error");
       } finally {
         setIsDeleting(false);
@@ -78,6 +166,33 @@ export default function SettingsPage() {
       addToast("This feature is not available yet", "info");
     }
   };
+
+  const getDangerModalContent = () => {
+    switch (dangerActionType) {
+      case "delete_docs":
+        return {
+          title: "Delete All Documents?",
+          desc: "This action cannot be undone and will permanently delete all your documents and their data.",
+          confirmText: isDeleting ? "Deleting..." : "Yes, Delete All"
+        };
+      case "reset_org":
+        return {
+          title: "Reset Organization?",
+          desc: "This will clear all settings and remove all members. This cannot be undone.",
+          confirmText: "Yes, Reset Organization"
+        };
+      case "delete_account":
+        return {
+          title: "Delete Account?",
+          desc: "Your account and all associated data will be permanently deleted.",
+          confirmText: isDeleting ? "Deleting..." : "Yes, Delete Account"
+        };
+      default:
+        return { title: "Are you sure?", desc: "", confirmText: "Confirm" };
+    }
+  };
+
+  const modalContent = getDangerModalContent();
 
   const navItems = ["Profile", "System", "Reset"];
 
@@ -319,6 +434,9 @@ export default function SettingsPage() {
                   Backend: {backendStatus === "online" ? "Connected" : backendStatus === "offline" ? "Disconnected" : "Checking..."}
                 </span>
               </div>
+              <p className="text-[12px] text-text-muted mb-4" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+                {backendUrl}
+              </p>
               <button
                 onClick={() => {
                   setBackendStatus("checking");
@@ -331,15 +449,71 @@ export default function SettingsPage() {
                 Test Connection
               </button>
             </div>
+
+            <div className="glass-card rounded-2xl shadow-sm p-6 mt-6">
+              <h3 className="text-[16px] font-bold text-text-primary mb-4">AI Models</h3>
+              <div className="space-y-0">
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Generation Model: {generationModel}</p>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Embedding Model: gemini-embedding-001</p>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
+                </div>
+                <div className="flex items-center justify-between py-3">
+                  <p className="text-[13px] text-text-secondary">Embedding Dimensions: 768</p>
+                  <span className="text-[12px] font-medium text-text-primary">Configured</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-2xl shadow-sm p-6 mt-6">
+              <h3 className="text-[16px] font-bold text-text-primary mb-4">Storage</h3>
+              <div className="space-y-0">
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Vector Store: Supabase pgvector</p>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Document Storage: Supabase Storage Bucket</p>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
+                </div>
+                <div className="flex items-center justify-between py-3">
+                  <p className="text-[13px] text-text-secondary">Metadata Store: PostgreSQL (via Supabase)</p>
+                  <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold text-white bg-accent-teal">Active</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-card rounded-2xl shadow-sm p-6 mt-6">
+              <h3 className="text-[16px] font-bold text-text-primary mb-4">Environment</h3>
+              <div className="space-y-0">
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Runtime Environment</p>
+                  <span className="text-[12px] font-medium text-text-primary" style={{ fontFamily: "var(--font-mono), ui-monospace, monospace" }}>
+                    {environmentName}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b border-border/30">
+                  <p className="text-[13px] text-text-secondary">Frontend Version: Next.js 16</p>
+                  <span className="text-[12px] font-medium text-text-primary">Active</span>
+                </div>
+                <div className="flex items-center justify-between py-3">
+                  <p className="text-[13px] text-text-secondary">API Version: 1.0.0</p>
+                  <span className="text-[12px] font-medium text-text-primary">Active</span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
       <ConfirmModal
         isOpen={isDangerModalOpen}
-        title="Are you sure?"
-        description="This action cannot be undone and will permanently delete all your documents and their data."
-        confirmLabel={isDeleting ? "Deleting..." : "Yes, Delete All"}
+        title={modalContent.title}
+        description={modalContent.desc}
+        confirmLabel={modalContent.confirmText}
         confirmVariant="danger"
         onConfirm={handleDangerAction}
         onCancel={() => setIsDangerModalOpen(false)}

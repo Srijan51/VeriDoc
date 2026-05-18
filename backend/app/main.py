@@ -12,9 +12,9 @@ from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.routers import query, documents, upload
-from app.services.storage import get_all_documents, delete_document_metadata
+from app.services.storage import get_all_documents, delete_document_metadata, delete_file_from_storage
 from app.services.embeddings import delete_document_vectors
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, delete_user_account, email_exists
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,31 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger(__name__)
+
+
+def _delete_all_user_documents(user_id: str) -> int:
+    rows = get_all_documents(user_id=user_id)
+    deleted = 0
+
+    for row in rows:
+        doc_id = row["doc_id"]
+        file_path = row.get("file_path")
+        try:
+            delete_document_vectors(doc_id)
+        except Exception:
+            logger.warning("Failed to delete vectors for doc_id=%s", doc_id)
+        if file_path:
+            try:
+                delete_file_from_storage(file_path)
+            except Exception:
+                logger.warning("Failed to delete storage file for doc_id=%s", doc_id)
+        try:
+            delete_document_metadata(doc_id)
+        except Exception:
+            logger.warning("Failed to delete metadata for doc_id=%s", doc_id)
+        deleted += 1
+
+    return deleted
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -80,19 +105,7 @@ def create_app() -> FastAPI:
         """Remove all documents and their associated vector embeddings for the authenticated user."""
         user_id = get_current_user(request)
         try:
-            rows = get_all_documents(user_id=user_id)
-            deleted = 0
-            for row in rows:
-                doc_id = row["doc_id"]
-                try:
-                    delete_document_vectors(doc_id)
-                except Exception:
-                    logger.warning("Failed to delete vectors for doc_id=%s", doc_id)
-                try:
-                    delete_document_metadata(doc_id)
-                except Exception:
-                    logger.warning("Failed to delete metadata for doc_id=%s", doc_id)
-                deleted += 1
+            deleted = _delete_all_user_documents(user_id)
             return {"deleted": deleted, "message": f"Deleted {deleted} document(s)"}
         except Exception as exc:
             logger.exception("Failed to delete all documents")
@@ -100,6 +113,32 @@ def create_app() -> FastAPI:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to delete documents: {exc}",
             )
+
+    @app.delete(
+        "/account",
+        status_code=status.HTTP_200_OK,
+        summary="Delete the current user's account and data",
+        tags=["auth"],
+    )
+    async def delete_account(request: Request) -> dict:
+        """Delete the authenticated user's documents and Supabase auth account."""
+        user_id = get_current_user(request)
+        deleted_documents = _delete_all_user_documents(user_id)
+        delete_user_account(user_id)
+        return {
+            "deleted_documents": deleted_documents,
+            "message": "Account deleted successfully",
+        }
+
+    @app.get(
+        "/auth/email-exists",
+        status_code=status.HTTP_200_OK,
+        summary="Check whether an email already has an account",
+        tags=["auth"],
+    )
+    async def check_email_exists(email: str) -> dict:
+        exists = email_exists(email)
+        return {"exists": exists}
 
     # ── Delete single document ────────────────────────────────────────────────
     @app.delete(
@@ -124,6 +163,12 @@ def create_app() -> FastAPI:
                 delete_document_vectors(doc_id)
             except Exception:
                 logger.warning("Failed to delete vectors for doc_id=%s", doc_id)
+            file_path = doc.get("file_path")
+            if file_path:
+                try:
+                    delete_file_from_storage(file_path)
+                except Exception:
+                    logger.warning("Failed to delete storage file for doc_id=%s", doc_id)
             delete_document_metadata(doc_id)
             return {"deleted": 1, "message": f"Deleted document {doc_id}"}
         except HTTPException:

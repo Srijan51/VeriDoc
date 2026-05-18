@@ -9,6 +9,7 @@ interface SourceDoc {
   score: number;
 }
 
+// TODO: Replace this hardcoded ranking list and scores with real backend data.
 const documents: SourceDoc[] = [
   { rank: 1, name: "HR Policy.pdf", type: "pdf", score: 98 },
   { rank: 2, name: "Employee Handbook.pdf", type: "pdf", score: 92 },

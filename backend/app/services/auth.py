@@ -55,3 +55,40 @@ def get_current_user(request: Request) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Authentication failed: {exc}",
         )
+
+
+def delete_user_account(user_id: str) -> None:
+    """Delete a Supabase auth user using the service role key."""
+    settings = get_settings()
+    client = create_client(settings.supabase_url, settings.supabase_key)
+
+    try:
+        client.auth.admin.delete_user(user_id)
+        logger.info("Deleted auth user: %s", user_id)
+    except Exception as exc:
+        logger.exception("Failed to delete auth user: %s", user_id)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to delete account: {exc}",
+        )
+
+
+def email_exists(email: str) -> bool:
+    """Return True if Supabase auth already has a user with this email."""
+    settings = get_settings()
+    client = create_client(settings.supabase_url, settings.supabase_key)
+    target_email = email.strip().lower()
+
+    try:
+        users = client.auth.admin.list_users(page=1, per_page=1000)
+        for user in users:
+            user_email = getattr(user, "email", None)
+            if user_email and user_email.strip().lower() == target_email:
+                return True
+        return False
+    except Exception as exc:
+        logger.exception("Failed to check if email exists: %s", email)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to check email: {exc}",
+        )

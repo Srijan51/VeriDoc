@@ -79,7 +79,7 @@ Required keys in `.env`:
 ```env
 GEMINI_API_KEY=...
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=...
+SUPABASE_KEY=...   # service role key required for account deletion
 ALLOWED_ORIGINS=http://localhost:3000,https://your-app.vercel.app
 ```
 
@@ -192,4 +192,3 @@ List all uploaded documents with metadata.
 - Supabase tables, vector extension, and RPC functions must be created manually via `supabase_schema.sql`.
 
 
-do it according to the implementation plan, add the effective date column and the authority scores should not be displayed to the user, its not a problem if it is still used in the backend

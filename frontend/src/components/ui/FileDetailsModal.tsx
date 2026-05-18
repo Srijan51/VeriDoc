@@ -2,18 +2,26 @@
 
 import React, { useState } from "react";
 
+export type DocumentTypeValue = "policy" | "handbook" | "sop" | "memo";
+
+export interface FileDetails {
+  type: DocumentTypeValue;
+  date: string;
+  file?: File;
+}
+
 interface FileDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (details: { type: string; date: string; file?: File }) => void;
+  onSave: (details: FileDetails) => void;
   selectedFile?: File;
 }
 
 const documentTypes = [
-  "Policy",
-  "Handbook/Manual",
-  "Standard Operating Procedure",
-  "Memo"
+  { label: "Policy", value: "policy" },
+  { label: "Handbook / Manual", value: "handbook" },
+  { label: "Standard Operating Procedure", value: "sop" },
+  { label: "Memo", value: "memo" },
 ];
 
 export default function FileDetailsModal({
@@ -22,21 +30,25 @@ export default function FileDetailsModal({
   onSave,
   selectedFile,
 }: FileDetailsModalProps) {
-  const [selectedType, setSelectedType] = useState<string>("");
+  const [selectedType, setSelectedType] = useState<DocumentTypeValue | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
 
   if (!isOpen) return null;
 
   const handleSave = () => {
+    if (!selectedType || !selectedDate) {
+      return;
+    }
+
     onSave({ type: selectedType, date: selectedDate, file: selectedFile });
     // Reset state for next open
-    setSelectedType("");
+    setSelectedType(null);
     setSelectedDate("");
     onClose();
   };
 
   const handleClose = () => {
-    setSelectedType("");
+    setSelectedType(null);
     setSelectedDate("");
     onClose();
   };
@@ -71,12 +83,12 @@ export default function FileDetailsModal({
             Document Type
           </label>
           <div className="grid grid-cols-2 gap-3">
-            {documentTypes.map((type) => (
+            {documentTypes.map((typeOption) => (
               <div
-                key={type}
-                onClick={() => setSelectedType(type)}
+                key={typeOption.value}
+                onClick={() => setSelectedType(typeOption.value)}
                 className={`p-3 rounded-lg border cursor-pointer transition-all ${
-                  selectedType === type
+                  selectedType === typeOption.value
                     ? "border-accent-mint bg-accent-mint/10"
                     : "border-border bg-white/40 hover:bg-white/60"
                 }`}
@@ -84,23 +96,23 @@ export default function FileDetailsModal({
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                      selectedType === type
+                      selectedType === typeOption.value
                         ? "border-accent-mint"
                         : "border-text-muted"
                     }`}
                   >
-                    {selectedType === type && (
+                    {selectedType === typeOption.value && (
                       <div className="w-2 h-2 rounded-full bg-accent-mint" />
                     )}
                   </div>
                   <span
                     className={`text-[13px] font-medium ${
-                      selectedType === type
+                      selectedType === typeOption.value
                         ? "text-text-primary"
                         : "text-text-secondary"
                     }`}
                   >
-                    {type}
+                    {typeOption.label}
                   </span>
                 </div>
               </div>

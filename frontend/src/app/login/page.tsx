@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/hooks/useAuth";
 
 export default function LoginPage() {
@@ -13,6 +13,20 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { signIn } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const emailFromQuery = searchParams.get("email");
+    const messageFromQuery = searchParams.get("message");
+
+    if (emailFromQuery) {
+      setEmail(emailFromQuery);
+    }
+
+    if (messageFromQuery) {
+      setError(messageFromQuery);
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +52,9 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-card animate-scale-in">
         {/* Logo */}
-        <div className="flex justify-center mb-6">
-          <img src="/logo.png" alt="VeriDoc Logo" className="w-20 h-20 rounded-2xl shadow-xl border border-[var(--border)]" />
+        <div className="flex flex-col items-center justify-center mb-6">
+          <img src="/login-logo.png" alt="VeriDoc Login Logo" className="w-20 h-20 rounded-2xl shadow-xl border border-[var(--border)] object-cover mb-3" />
+          <h1 className="text-2xl font-bold tracking-widest text-text-primary" style={{ fontFamily: "var(--font-heading)" }}>VERIDOC</h1>
         </div>
 
         {/* Header Badge */}

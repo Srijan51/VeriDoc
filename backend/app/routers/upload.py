@@ -14,7 +14,12 @@ from datetime import datetime
 from app.models.schemas import UploadResponse
 from app.services.document_processor import process_document, SUPPORTED_TYPES
 from app.services.embeddings import upsert_chunks
-from app.services.storage import store_in_supabase, upload_file_to_storage, update_document_file_path
+from app.services.storage import (
+    store_in_supabase,
+    upload_file_to_storage,
+    update_document_file_path,
+    get_document_by_filename,
+)
 from app.services.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -89,6 +94,13 @@ async def upload_document(
     doc_id = str(uuid.uuid4())
     filename = Path(file.filename).name if file.filename else f"{doc_id}.bin"
     user_id = get_current_user(request)
+
+    existing_document = get_document_by_filename(user_id, filename)
+    if existing_document:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"A file named '{filename}' already exists. Please rename it or delete the existing document before uploading again.",
+        )
 
     # Process document
     try:

@@ -5,9 +5,8 @@ import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 import DocTypeIcon from "@/components/ui/DocTypeIcon";
-import AuthorityBar from "@/components/ui/AuthorityBar";
 import SeverityBadge from "@/components/ui/SeverityBadge";
-import FileDetailsModal from "@/components/ui/FileDetailsModal";
+import FileDetailsModal, { type FileDetails } from "@/components/ui/FileDetailsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { fetchDocuments, uploadDocument, deleteDocument, getDocumentViewUrl } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
@@ -21,7 +20,6 @@ interface Document {
   docDate: string;
   department: string;
   uploadedAt: string;
-  authorityScore: number;
   conflicts: number;
   status: "Active" | "Outdated" | "Processing";
 }
@@ -44,6 +42,7 @@ export default function DocumentsPage() {
   // New States for Advanced Features
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  const [previewDocText, setPreviewDocText] = useState<string | null>(null);
   const [previewDocName, setPreviewDocName] = useState<string>("");
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [editType, setEditType] = useState("Policy");
@@ -71,11 +70,6 @@ export default function DocumentsPage() {
       ).length;
 
       const cat = doc.doc_type || "Unknown";
-      let authScore = 50;
-      if (cat === "Policy") authScore = 100;
-      else if (cat === "Handbook") authScore = 80;
-      else if (cat === "SOP") authScore = 60;
-      else if (cat === "Memo") authScore = 40;
 
       return {
         id: doc.doc_id,
@@ -85,7 +79,6 @@ export default function DocumentsPage() {
         docDate: doc.doc_date || "Unknown",
         department: "",
         uploadedAt: new Date(doc.uploaded_at).toLocaleDateString(),
-        authorityScore: authScore,
         conflicts: docConflicts,
         status: "Active" as const,
       };
@@ -157,8 +150,6 @@ export default function DocumentsPage() {
       result = [...result].reverse(); // Newest first
     } else if (sortBy === "oldest") {
       result = [...result]; // Oldest first (original order)
-    } else if (sortBy === "authority") {
-      result = [...result].sort((a, b) => b.authorityScore - a.authorityScore);
     }
 
     setFilteredDocuments(result);
@@ -177,11 +168,7 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleUpload = async (details: {
-    type: string;
-    date: string;
-    file?: File;
-  }) => {
+  const handleUpload = async (details: FileDetails) => {
     if (!details.file && !selectedFile) {
       addToast("No file selected", "error");
       return;
@@ -222,9 +209,12 @@ export default function DocumentsPage() {
       const isPdf = response.filename.toLowerCase().endsWith(".pdf");
       
       if (isPdf) {
-        setPreviewDocUrl(`https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`);
-      } else if (response.filename.toLowerCase().endsWith(".txt")) {
         setPreviewDocUrl(url);
+      } else if (response.filename.toLowerCase().endsWith(".txt")) {
+        const textRes = await fetch(url);
+        const textContent = await textRes.text();
+        setPreviewDocText(textContent);
+        setPreviewDocUrl("txt-mode");
       } else {
         window.open(url, "_blank");
         return;
@@ -300,12 +290,7 @@ export default function DocumentsPage() {
     if (!editingDocId) return;
     setDocuments(prev => prev.map(d => {
       if (d.id === editingDocId) {
-        let authScore = 50;
-        if (editType === "Policy") authScore = 100;
-        else if (editType === "Handbook") authScore = 80;
-        else if (editType === "SOP") authScore = 60;
-        else if (editType === "Memo") authScore = 40;
-        return { ...d, category: editType, docDate: editDate, authorityScore: authScore };
+        return { ...d, category: editType, docDate: editDate };
       }
       return d;
     }));
@@ -511,10 +496,10 @@ export default function DocumentsPage() {
           <p className="font-bold mb-1" style={{ fontFamily: "var(--font-heading), serif" }}>System Hierarchy</p>
           <p className="text-text-secondary leading-relaxed text-[12px]">
             VERIDOC resolves conflicts using the following strict authority order: 
-            <span className="font-bold text-accent-teal ml-1">Policy</span> (100) &gt; 
-            <span className="font-bold text-accent-teal mx-1">Handbook</span> (80) &gt; 
-            <span className="font-bold text-accent-teal mx-1">SOP</span> (60) &gt; 
-            <span className="font-bold text-accent-teal mx-1">Memo</span> (40).
+            <span className="font-bold text-accent-teal ml-1">Policy</span> &gt; 
+            <span className="font-bold text-accent-teal mx-1">Handbook</span> &gt; 
+            <span className="font-bold text-accent-teal mx-1">SOP</span> &gt; 
+            <span className="font-bold text-accent-teal mx-1">Memo</span>.
             <br />
             Newer documents automatically take precedence over older documents within the same category.
           </p>
@@ -546,7 +531,6 @@ export default function DocumentsPage() {
           >
             <option value="newest">Newest ▾</option>
             <option value="oldest">Oldest ▾</option>
-            <option value="authority">Authority ▾</option>
           </select>
           <div className="relative">
             <svg
@@ -573,7 +557,7 @@ export default function DocumentsPage() {
       </div>
 
       {/* Document Table / States */}
-      <div className="glass-card rounded-xl border border-white/60 overflow-hidden shadow-sm">
+      <div className="glass-card rounded-xl border border-white/60 shadow-sm overflow-x-auto">
         {isLoading ? (
           <div className="p-6">
             <LoadingSkeleton variant="table-row" rows={5} />
@@ -649,6 +633,9 @@ export default function DocumentsPage() {
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
                   Category
                 </th>
+                <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted whitespace-nowrap">
+                  Effective Date
+                </th>
                 <th className="py-3 px-4 text-[11px] font-medium uppercase tracking-wider text-text-muted">
                   Uploaded
                 </th>
@@ -706,6 +693,9 @@ export default function DocumentsPage() {
                       {doc.category}
                     </span>
                   </td>
+                  <td className="py-3 px-4 text-[12px] text-text-primary whitespace-nowrap">
+                    {doc.docDate !== "Unknown" ? doc.docDate : "—"}
+                  </td>
                   <td className="py-3 px-4 text-[12px] text-text-muted">
                     {doc.uploadedAt}
                   </td>
@@ -762,10 +752,16 @@ export default function DocumentsPage() {
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-mint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                 {previewDocName}
               </h2>
-              <button onClick={() => { setPreviewDocUrl(null); setPreviewDocName(""); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white border border-transparent hover:border-border text-text-muted hover:text-text-primary transition-all">✕</button>
+              <button onClick={() => { setPreviewDocUrl(null); setPreviewDocText(null); setPreviewDocName(""); }} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white border border-transparent hover:border-border text-text-muted hover:text-text-primary transition-all">✕</button>
             </div>
             <div className="flex-1 bg-white rounded-b-2xl overflow-hidden relative">
-              <iframe src={previewDocUrl} className="w-full h-full border-0 absolute inset-0" title="Document Preview" />
+              {previewDocText !== null ? (
+                <div className="w-full h-full p-6 overflow-auto bg-white text-black font-mono text-[13px] whitespace-pre-wrap">
+                  {previewDocText}
+                </div>
+              ) : (
+                <iframe src={previewDocUrl} className="w-full h-full border-0 absolute inset-0" title="Document Preview" />
+              )}
             </div>
           </div>
         </div>
@@ -781,10 +777,10 @@ export default function DocumentsPage() {
               <div>
                 <label className="block text-[11px] font-bold text-text-muted uppercase mb-1.5">Document Category</label>
                 <select value={editType} onChange={e => setEditType(e.target.value)} className="w-full px-3 py-2.5 rounded-xl border border-border text-[13px] outline-none focus:border-accent-mint bg-transparent">
-                  <option value="Policy">Policy (Score 100)</option>
-                  <option value="Handbook">Handbook (Score 80)</option>
-                  <option value="SOP">SOP (Score 60)</option>
-                  <option value="Memo">Memo (Score 40)</option>
+                  <option value="Policy">Policy</option>
+                  <option value="Handbook">Handbook</option>
+                  <option value="SOP">SOP</option>
+                  <option value="Memo">Memo</option>
                 </select>
               </div>
               <div>
