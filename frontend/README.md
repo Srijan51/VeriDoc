@@ -1,5 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+🌐 What this app does
+
+The frontend provides an intuitive interface for uploading documents, running full or targeted scans, viewing ranked contradictions, and resolving items. It offers reviewer workflows, in-context source links, and quick actions to triage issues at scale.
+
+🔥 Highlights
+
+- Upload PDFs/DOCX/TXT and trigger scans from the UI
+- View contradictions with severity badges and source snippets
+- Targeted search to focus scans on selected documents
+- One-click resolve and reviewer annotations
+
 ## Getting Started
 
 First, run the development server:
