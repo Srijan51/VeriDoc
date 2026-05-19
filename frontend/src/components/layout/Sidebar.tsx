@@ -105,7 +105,10 @@ export default function Sidebar() {
         <div className="flex items-center gap-3">
           {/* New Book Logo */}
           <div className="flex items-center justify-center shrink-0">
-            <img src="/logo.png" alt="VeriDoc Logo" className="w-10 h-10 object-contain rounded-md mix-blend-multiply contrast-[1.1]" />
+            {/* Put the transparent logo on the dashboard off-white so it visually blends */}
+            <div className="w-10 h-10 rounded-md overflow-hidden flex items-center justify-center" style={{ background: "var(--bg-primary)", padding: 4 }}>
+              <img src="/logo.png" alt="VeriDoc Logo" className="w-full h-full object-contain" />
+            </div>
           </div>
           <div>
             <h1
