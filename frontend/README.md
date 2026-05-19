@@ -20,6 +20,17 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment
+
+- Copy `..\.env.example` into `frontend/.env` and fill in any required keys for local development.
+- Do not commit local secret files. `frontend/.env.local` is intended to be a machine-local file and is ignored by git. If you accidentally committed it, remove it from the index with:
+
+```bash
+git rm --cached frontend/.env.local
+```
+
+Keep secret keys out of your repository and use environment variables in deployment.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

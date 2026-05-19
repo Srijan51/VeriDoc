@@ -99,6 +99,17 @@ Interactive docs at **http://localhost:8000/docs**
 
 > Supabase email templates are managed in the Supabase Dashboard: **Authentication → Email Templates**. Keep custom HTML there instead of in this README.
 
+## Environment & Secrets
+
+- Copy `.env.example` to `.env` and fill in keys before running locally. Do not commit files containing secrets.
+- If you use a local-only env file such as `.env.local`, keep it out of version control (it should be listed in `.gitignore`). To remove it from git tracking if it was committed accidentally:
+
+```bash
+git rm --cached backend/.env.local
+```
+
+Refer to the root README for full-stack development and deployment notes.
+
 ---
 
 ## API Reference
