@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useToast } from '@/lib/hooks/useToast';
+import { useToastContext as useToast } from '@/lib/context/ToastContext';
 
 export function ToastContainer() {
   const { toasts, removeToast } = useToast();

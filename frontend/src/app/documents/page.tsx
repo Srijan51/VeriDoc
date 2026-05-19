@@ -9,7 +9,7 @@ import SeverityBadge from "@/components/ui/SeverityBadge";
 import FileDetailsModal, { type FileDetails } from "@/components/ui/FileDetailsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { fetchDocuments, uploadDocument, deleteDocument, getDocumentViewUrl, queryDocuments } from "@/lib/api";
-import { useToast } from "@/lib/hooks/useToast";
+import { useToastContext as useToast } from "@/lib/context/ToastContext";
 
 // Represents the expected backend document model
 interface Document {

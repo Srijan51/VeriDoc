@@ -17,7 +17,7 @@ interface FileDetailsModalProps {
   selectedFile?: File;
 }
 
-const documentTypes = [
+const documentTypes: { label: string; value: DocumentTypeValue }[] = [
   { label: "Policy", value: "policy" },
   { label: "Handbook / Manual", value: "handbook" },
   { label: "Standard Operating Procedure", value: "sop" },

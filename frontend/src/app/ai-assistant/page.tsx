@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { fetchDocuments, queryDocuments, Citation, Contradiction, getDocumentViewUrl } from "@/lib/api";
-import { useToast } from "@/lib/hooks/useToast";
+import { useToastContext as useToast } from "@/lib/context/ToastContext";
 
 interface AssistantMessage {
   role: "user" | "assistant";

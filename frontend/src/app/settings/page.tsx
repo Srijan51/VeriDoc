@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import ConfirmModal from "@/components/ui/ConfirmModal";
 import { deleteAccount, deleteAllDocuments, healthCheck } from "@/lib/api";
 import { useDocuments } from "@/lib/hooks/useDocuments";
-import { useToast } from "@/lib/hooks/useToast";
+import { useToastContext as useToast } from "@/lib/context/ToastContext";
 import { useAuth } from "@/lib/hooks/useAuth";
 import { useRouter } from "next/navigation";
 

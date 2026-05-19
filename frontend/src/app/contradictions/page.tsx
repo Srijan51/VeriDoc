@@ -5,7 +5,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingSkeleton from "@/components/ui/LoadingSkeleton";
 import { fetchDocuments, queryDocuments, Contradiction } from "@/lib/api";
-import { useToast } from "@/lib/hooks/useToast";
+import { useToastContext as useToast } from "@/lib/context/ToastContext";
 
 interface ContradictionCard {
   id: string;
