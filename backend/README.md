@@ -246,4 +246,22 @@ List all uploaded documents with metadata.
 - Add your Vercel frontend URL to `ALLOWED_ORIGINS`.
 - Supabase tables, vector extension, and RPC functions must be created manually via `supabase_schema.sql`.
 
+### Deploying on Render (backend)
+
+- This repository includes a `Procfile` to run the app with Gunicorn + Uvicorn workers (recommended for Render). The `Procfile` entry is:
+
+```text
+web: gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT --log-file -
+```
+
+- Ensure the `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_KEY`, and `ALLOWED_ORIGINS` environment variables are set in your Render service settings.
+- Use the `requirements.txt` for Python dependencies; `gunicorn` is included.
+
+### Deploying the frontend to Vercel
+
+- The frontend is Vercel-first. A minimal `vercel.json` is included to ensure Next.js builds with Vercel's adapter.
+- Configure environment variables in the Vercel dashboard (e.g., `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`).
+
+---
+
 

@@ -22,6 +22,7 @@ export default function SettingsPage() {
   // Modals
   const [isDangerModalOpen, setIsDangerModalOpen] = useState(false);
   const [dangerActionType, setDangerActionType] = useState<string | null>(null);
+  const [contradictionsDetected, setContradictionsDetected] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
   const [systemMessage, setSystemMessage] = useState("");
