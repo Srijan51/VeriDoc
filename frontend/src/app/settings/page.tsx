@@ -22,12 +22,13 @@ export default function SettingsPage() {
   // Modals
   const [isDangerModalOpen, setIsDangerModalOpen] = useState(false);
   const [dangerActionType, setDangerActionType] = useState<string | null>(null);
-  const [contradictionsDetected, setContradictionsDetected] = useState(0);
   const [isDeleting, setIsDeleting] = useState(false);
   const [backendStatus, setBackendStatus] = useState<"checking" | "online" | "offline">("checking");
   const [systemMessage, setSystemMessage] = useState("");
   const [avatarColor, setAvatarColor] = useState("#00C9A7");
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [contradictionsDetected, setContradictionsDetected] = useState(0);
+
   const { addToast } = useToast();
   const { user, signOut } = useAuth();
   const { documents, refreshDocuments } = useDocuments();
@@ -74,6 +75,25 @@ export default function SettingsPage() {
     void refreshDocuments();
   }, [activeTab, refreshDocuments]);
 
+  // Safely check sessionStorage on the client side only
+  useEffect(() => {
+    try {
+      const scanned = sessionStorage.getItem("veridoc_scanned_contradictions");
+      if (scanned) {
+        const parsed = JSON.parse(scanned);
+        if (Array.isArray(parsed)) {
+          setContradictionsDetected(parsed.length);
+          return;
+        }
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+    
+    // Fallback to documents length if no valid session storage is found
+    setContradictionsDetected(documents.length);
+  }, [documents.length]);
+
   const memberSince = user?.created_at
     ? new Date(user.created_at).toLocaleDateString()
     : "Not available";
@@ -88,19 +108,6 @@ export default function SettingsPage() {
           .sort((a, b) => b - a)[0]
       ).toLocaleDateString()
     : "No uploads yet";
-
-  let contradictionsDetected = documents.length;
-  try {
-    const scanned = sessionStorage.getItem("veridoc_scanned_contradictions");
-    if (scanned) {
-      const parsed = JSON.parse(scanned);
-      if (Array.isArray(parsed)) {
-        contradictionsDetected = parsed.length;
-      }
-    }
-  } catch {
-    contradictionsDetected = documents.length;
-  }
 
   const handleSaveProfile = async () => {
     setIsSaving(true);
