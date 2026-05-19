@@ -1,56 +1,81 @@
 # VeriDoc
 
-VeriDoc is an Enterprise Knowledge Truth Engine that helps organizations detect contradictions, outdated policies, and inconsistencies across large document collections. It combines document ingestion, vector search, and generative AI to surface evidence-backed conflicts and provide actionable summaries for policy review.
+🎯 **VeriDoc — Enterprise Knowledge Truth Engine**
 
-## Project Summary
+VeriDoc helps teams keep a single source of truth across documentation at scale. It automatically ingests documents, builds semantic search indexes, and runs contradiction scans that surface conflicting statements, rank their severity, and link back to original sources so reviewers can act quickly.
 
-- Purpose: Continuously analyze an organization's documents (policies, manuals, guides, reports) to detect conflicting statements, policy drift, and high-impact inconsistencies. VeriDoc highlights sources, severity, and suggested resolutions so teams can efficiently triage and fix issues.
-- Audience: Compliance teams, knowledge managers, legal reviewers, and product teams who need to maintain a single source of truth across many documents.
+✨ Why this matters
 
-## Key Features
+- Organizations accumulate policies, handbooks, and operational documents across teams and time. Human review is slow — VeriDoc accelerates discovery of contradictions, outdated policies, and risky divergence so you can remediate confidently.
+- The system prioritizes signals by severity, confidence, and impact so reviewers focus on what matters.
 
-- Document ingestion: PDF, DOCX, and plain text extraction with chunking for granular retrieval.
-- Vector search: Store embeddings in Supabase pgvector and perform fast semantic retrieval.
-- Contradiction scanning: Automated scans that surface conflicting claims and rank them by severity and confidence.
-- Source attribution: Each signal links back to document chunks with provenance and relevance scores.
-- One-click resolve actions: UI hooks to mark conflicts resolved or create tasks for reviewers.
-- Targeted search: Run focused scans against selected documents or subsets.
-- Extensible model layer: Pluggable generation and embedding backends (Gemini / Google embeddings by default).
+🚀 Highlights / What VeriDoc does
 
-## Architecture & Tech Stack
+- 🔎 Semantic search across documents using embeddings + pgvector
+- ⚠️ Contradiction detection with ranked severity and provenance
+- 🔗 Source attribution: show the exact document chunk and context
+- ✅ One-click resolve actions and reviewer workflows
+- 🎯 Targeted scans for subsets or single documents
+- 🔌 Extensible model layer: swap embeddings/generation backends
 
-- API: FastAPI (Python)
-- Frontend: Next.js (React, TypeScript)
-- Embeddings: Google `text-embedding-004` (configurable)
-- Vector store & Metadata: Supabase (PostgreSQL + pgvector)
-- Document parsing: PyMuPDF, python-docx
-- Hosting / Deployment: Designed for environment-variable based deploys (Vercel, Azure, etc.)
+📦 Primary use cases
 
-## Project Structure
+- Compliance audits — find conflicting policy language before an external review
+- Knowledge consolidation — detect duplicate or contradictory guidance across teams
+- Product documentation QA — surface outdated or inconsistent engineering docs
+
+🧭 Architecture & Tech Stack (high-level)
+
+- Backend: `FastAPI` (Python) — ingestion, scan orchestration, API
+- Frontend: `Next.js` (React + TypeScript) — interactive UI, scan controls
+- Embeddings: Google embeddings (configurable) — vectorize text
+- Vector store: Supabase `pgvector` — fast semantic retrieval + metadata
+- Storage/metadata: Supabase (Postgres)
+- Parsers: `PyMuPDF`, `python-docx` for document extraction
+
+```mermaid
+flowchart LR
+	A[Documents] --> B[Ingest & Chunk]
+	B --> C[Embeddings]
+	C --> D[pgvector Index]
+	D --> E[Retrieval]
+	E --> F[Contradiction Scanner]
+	F --> G[UI: Contradictions]
+	G --> H[Resolve / Mark / Export]
+```
+
+🗂 Project layout (short)
 
 ```
 .
-├── backend/            # FastAPI service, ingestion, embeddings, Supabase integration
-│   ├── app/
-│   ├── run.py
-│   └── README.md       # Backend-specific run & setup instructions
-
-├── frontend/           # Next.js app: UI for uploads, scans, contradictions
-│   ├── app/
-│   └── README.md       # Frontend-specific run & setup instructions
-
+├── backend/      # FastAPI service: ingestion, embedding, scan jobs, Supabase
+├── frontend/     # Next.js app: upload, scan UI, contradictions, reviewer flows
 ├── ACTION_ITEMS.md
 ├── INTEGRATION_COMPLETE.md
 ├── QUICK_START.md
-└── README.md           # This file: project overview, features, structure
+└── README.md     # This file (overview + links)
 ```
 
-## Where to find run & deployment instructions
+📚 Where to find detailed run & setup instructions
 
-Run and deployment steps live inside the service folders:
+- Backend setup and API docs: [backend/README.md](backend/README.md)
+- Frontend setup and environment notes: [frontend/README.md](frontend/README.md)
 
-- See [backend/README.md](backend/README.md) for backend setup and `uvicorn` instructions.
-- See [frontend/README.md](frontend/README.md) for frontend development and environment notes.
+🔐 Environment & secrets
 
-If you'd like I can expand any section (architecture diagram, data-flow, or component responsibilities).
+- Keep secret config out of source control. Use `.env` / `.env.example` and platform env variables for deploys.
+- Local-only files like `frontend/.env.local` are ignored; if previously committed, remove them from the index and consider rotating keys.
+
+🤝 Contributing
+
+- Found a bug or want a feature? Open an issue describing the dataset and steps to reproduce.
+- For code contributions, fork, create a feature branch, and open a PR with tests and a short description.
+
+📬 Need help or want a walkthrough?
+
+- Ping the maintainers or open an issue — I can also prepare architecture diagrams or a short video walkthrough on request.
+
+---
+
+Would you like more visual polish (SVG badges, animated diagrams), or shall I add a short
 
