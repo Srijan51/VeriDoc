@@ -8,7 +8,7 @@ import DocTypeIcon from "@/components/ui/DocTypeIcon";
 import SeverityBadge from "@/components/ui/SeverityBadge";
 import FileDetailsModal, { type FileDetails } from "@/components/ui/FileDetailsModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
-import { fetchDocuments, uploadDocument, deleteDocument, getDocumentViewUrl } from "@/lib/api";
+import { fetchDocuments, uploadDocument, deleteDocument, getDocumentViewUrl, queryDocuments } from "@/lib/api";
 import { useToast } from "@/lib/hooks/useToast";
 
 // Represents the expected backend document model
@@ -231,7 +231,6 @@ export default function DocumentsPage() {
     setIsBulkActioning(true);
     addToast("Scanning selected documents for contradictions...", "info");
     try {
-      const { queryDocuments } = await import("@/lib/api");
       const queries = ["Compare these documents and identify any conflicting statements or contradictions"];
       const seen = new Set<string>();
       const collected: any[] = [];
@@ -820,5 +819,3 @@ export default function DocumentsPage() {
     </div>
   );
 }
-
-
